@@ -8,7 +8,16 @@ import streamlit as st
 from src.image_loader import find_species_image_url
 
 
-SUPPORTED_SEARCH_LANGUAGES = [
+LANGUAGE_FLAGS = [
+    "🇪🇸",
+    "🇬🇧",
+    "🇺🇦",
+    "🇵🇹",
+    "🇮🇹",
+    "🇷🇺",
+]
+
+LANGUAGE_LABELS = [
     "Español",
     "English",
     "Українська",
@@ -22,10 +31,9 @@ SEARCH_MODEL_DESCRIPTION = (
     "sinónimos multilingües + detección de intención + ajustes taxonómicos."
 )
 
-MODEL_ADEQUACY_URL = (
-    "https://huggingface.co/datasets/selenamir/"
-    "biodiversity-finder-artifacts/tree/main/reports"
-)
+MODEL_DASHBOARD_URL = "https://biodiversity-finder-training.streamlit.app/"
+
+MODEL_ADEQUACY_URL = MODEL_DASHBOARD_URL
 
 ARTIFACTS_URL = (
     "https://huggingface.co/datasets/selenamir/"
@@ -74,9 +82,14 @@ def format_score(value: object) -> str:
         return "0.000"
 
 
-def get_supported_languages_text() -> str:
-    """Devuelve los idiomas disponibles como texto."""
-    return ", ".join(SUPPORTED_SEARCH_LANGUAGES)
+def get_language_flags_text() -> str:
+    """Devuelve los idiomas como banderas visibles."""
+    return " ".join(LANGUAGE_FLAGS)
+
+
+def get_supported_languages_accessible_text() -> str:
+    """Devuelve texto accesible con nombres de idiomas."""
+    return ", ".join(LANGUAGE_LABELS)
 
 
 def apply_styles() -> None:
@@ -126,17 +139,34 @@ def render_header() -> None:
         "`animal polar hielo`, `bicho con alas`, `rana verde rio`, `planta con flor`."
     )
 
+    render_language_and_metrics_bar()
     render_search_system_info()
+
+
+def render_language_and_metrics_bar() -> None:
+    """Muestra idiomas y enlace a métricas de forma visible."""
+    language_column, metrics_column = st.columns([1.4, 1], vertical_alignment="center")
+
+    with language_column:
+        st.markdown("### 🌍 Idiomas de búsqueda")
+        st.markdown(f"## {get_language_flags_text()}")
+        st.caption(get_supported_languages_accessible_text())
+
+    with metrics_column:
+        st.markdown("### 🤖 Evaluación")
+        st.link_button(
+            "📊 Ver métricas de adecuación de la modelo",
+            MODEL_DASHBOARD_URL,
+            width="stretch",
+        )
 
 
 def render_search_system_info() -> None:
     """Muestra información visible sobre idiomas, búsqueda y modelo."""
-    with st.expander("ℹ️ Idiomas, buscador y adecuación de la modelo", expanded=False):
-        st.markdown("#### 🌍 Idiomas de búsqueda")
-        st.write(
-            "La búsqueda está preparada para entender términos básicos en: "
-            f"**{get_supported_languages_text()}**."
-        )
+    with st.expander("ℹ️ Cómo funciona el buscador", expanded=False):
+        st.markdown("#### 🌍 Idiomas")
+        st.markdown(f"## {get_language_flags_text()}")
+        st.caption(get_supported_languages_accessible_text())
 
         st.markdown(
             """
@@ -149,23 +179,23 @@ def render_search_system_info() -> None:
             """
         )
 
-        st.markdown("#### 🔎 Cómo está organizado el buscador")
+        st.markdown("#### 🔎 Buscador")
         st.write(SEARCH_MODEL_DESCRIPTION)
         st.caption(
             "Importante: el buscador no usa una LLM en tiempo real. "
             "Usa una estrategia híbrida de recuperación de información sobre la enciclopedia."
         )
 
-        st.markdown("#### 🤖 Modelo y parámetros de adecuación")
+        st.markdown("#### 🤖 Modelo y adecuación")
         st.write(
             "La app consulta una enciclopedia generada por el repositorio de training. "
-            "Ese pipeline descarga datos desde GBIF, limpia los registros, crea features, "
-            "entrena una modelo taxonómica y publica los artefactos en Hugging Face."
+            "Ese pipeline descarga datos desde GBIF, limpia registros, crea features, "
+            "entrena una modelo taxonómica y publica artefactos."
         )
 
         st.link_button(
-            "📊 Ver parámetros de adecuación de la modelo",
-            MODEL_ADEQUACY_URL,
+            "📊 Abrir dashboard de métricas de adecuación",
+            MODEL_DASHBOARD_URL,
         )
         st.link_button(
             "📦 Ver dataset y artefactos publicados",
@@ -205,14 +235,16 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
 
     st.sidebar.divider()
     st.sidebar.markdown("### 🌍 Idiomas")
-    st.sidebar.caption(get_supported_languages_text())
+    st.sidebar.markdown(f"### {get_language_flags_text()}")
+    st.sidebar.caption(get_supported_languages_accessible_text())
 
     st.sidebar.markdown("### 🧠 Buscador")
     st.sidebar.caption(SEARCH_MODEL_DESCRIPTION)
 
     st.sidebar.link_button(
-        "📊 Adecuación de la modelo",
-        MODEL_ADEQUACY_URL,
+        "📊 Métricas de adecuación",
+        MODEL_DASHBOARD_URL,
+        width="stretch",
     )
 
     st.sidebar.divider()
@@ -299,7 +331,7 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
                         width="stretch",
                     )
                 else:
-                    st.info("Sin foto disponible en GBIF")
+                    st.info("Sin foto disponible")
 
             with content_column:
                 score = row.get("search_score", 0.0)
