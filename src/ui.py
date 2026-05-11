@@ -75,7 +75,7 @@ def render_language_flags(compact: bool = False) -> None:
     y algunas configuraciones pueden enseñar HTML como texto.
     """
     columns = st.columns(len(LANGUAGE_FLAGS))
-    width = 34 if compact else 46
+    width = 30 if compact else 42
 
     for column, language in zip(columns, LANGUAGE_FLAGS):
         with column:
@@ -132,34 +132,23 @@ def render_header() -> None:
         "`animal polar hielo`, `bicho con alas`, `rana verde rio`, `planta con flor`."
     )
 
-    render_language_and_metrics_bar()
+    render_model_metrics_link()
     render_search_system_info()
 
 
-def render_language_and_metrics_bar() -> None:
-    """Muestra idiomas y enlace a métricas de forma visible."""
-    language_column, metrics_column = st.columns([1.4, 1], vertical_alignment="center")
-
-    with language_column:
-        st.markdown("### 🌍 Idiomas de búsqueda")
-        render_language_flags(compact=False)
-        st.caption(get_supported_languages_accessible_text())
-
-    with metrics_column:
-        st.markdown("### 🤖 Evaluación")
-        st.link_button(
-            "📊 Ver métricas de adecuación de la modelo",
-            MODEL_DASHBOARD_URL,
-            width="stretch",
-        )
+def render_model_metrics_link() -> None:
+    """Muestra el enlace al dashboard de métricas sin repetir banderas."""
+    st.link_button(
+        "📊 Ver métricas de adecuación de la modelo",
+        MODEL_DASHBOARD_URL,
+    )
 
 
 def render_search_system_info() -> None:
-    """Muestra información visible sobre idiomas, búsqueda y modelo."""
+    """Muestra información sobre búsqueda y modelo sin banderas duplicadas."""
     with st.expander("ℹ️ Cómo funciona el buscador", expanded=False):
         st.markdown("#### 🌍 Idiomas")
-        render_language_flags(compact=False)
-        st.caption(get_supported_languages_accessible_text())
+        st.write(get_supported_languages_accessible_text())
 
         st.markdown(
             """
@@ -196,8 +185,19 @@ def render_search_system_info() -> None:
         )
 
 
+def render_sidebar_language_block() -> None:
+    """Muestra idiomas como banderas en la parte superior de la barra lateral."""
+    st.sidebar.markdown("### 🌍 Idiomas")
+    with st.sidebar:
+        render_language_flags(compact=True)
+    st.sidebar.caption(get_supported_languages_accessible_text())
+    st.sidebar.divider()
+
+
 def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]:
     """Renderiza controles laterales de búsqueda y filtros."""
+    render_sidebar_language_block()
+
     st.sidebar.header("🔎 Búsqueda")
 
     query_text = st.sidebar.text_input(
@@ -227,10 +227,6 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
     )
 
     st.sidebar.divider()
-    st.sidebar.markdown("### 🌍 Idiomas")
-    render_language_flags(compact=True)
-    st.sidebar.caption(get_supported_languages_accessible_text())
-
     st.sidebar.markdown("### 🧠 Buscador")
     st.sidebar.caption(SEARCH_MODEL_DESCRIPTION)
 
