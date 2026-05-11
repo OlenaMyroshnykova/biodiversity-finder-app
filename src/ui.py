@@ -8,6 +8,31 @@ import streamlit as st
 from src.image_loader import find_species_image_url
 
 
+SUPPORTED_SEARCH_LANGUAGES = [
+    "Español",
+    "English",
+    "Українська",
+    "Português",
+    "Italiano",
+    "Русский",
+]
+
+SEARCH_MODEL_DESCRIPTION = (
+    "Búsqueda híbrida: TF-IDF por palabras + TF-IDF por caracteres + "
+    "sinónimos multilingües + detección de intención + ajustes taxonómicos."
+)
+
+MODEL_ADEQUACY_URL = (
+    "https://huggingface.co/datasets/selenamir/"
+    "biodiversity-finder-artifacts/tree/main/reports"
+)
+
+ARTIFACTS_URL = (
+    "https://huggingface.co/datasets/selenamir/"
+    "biodiversity-finder-artifacts"
+)
+
+
 def format_coordinate(value: object) -> str:
     """
     Formatea coordenadas de forma segura.
@@ -47,6 +72,11 @@ def format_score(value: object) -> str:
 
     except (TypeError, ValueError):
         return "0.000"
+
+
+def get_supported_languages_text() -> str:
+    """Devuelve los idiomas disponibles como texto."""
+    return ", ".join(SUPPORTED_SEARCH_LANGUAGES)
 
 
 def apply_styles() -> None:
@@ -96,6 +126,52 @@ def render_header() -> None:
         "`animal polar hielo`, `bicho con alas`, `rana verde rio`, `planta con flor`."
     )
 
+    render_search_system_info()
+
+
+def render_search_system_info() -> None:
+    """Muestra información visible sobre idiomas, búsqueda y modelo."""
+    with st.expander("ℹ️ Idiomas, buscador y adecuación de la modelo", expanded=False):
+        st.markdown("#### 🌍 Idiomas de búsqueda")
+        st.write(
+            "La búsqueda está preparada para entender términos básicos en: "
+            f"**{get_supported_languages_text()}**."
+        )
+
+        st.markdown(
+            """
+            **Ejemplos multilingües:**
+
+            - `mariposa`, `butterfly`, `метелик`, `borboleta`, `farfalla`, `бабочка`
+            - `oso polar`, `polar bear`, `білий ведмідь`, `urso polar`, `orso polare`
+            - `rana`, `frog`, `жаба`, `sapo`, `rã`, `rospo`
+            - `planta con flor`, `flowering plant`, `квіткова рослина`, `planta com flor`, `pianta con fiore`
+            """
+        )
+
+        st.markdown("#### 🔎 Cómo está organizado el buscador")
+        st.write(SEARCH_MODEL_DESCRIPTION)
+        st.caption(
+            "Importante: el buscador no usa una LLM en tiempo real. "
+            "Usa una estrategia híbrida de recuperación de información sobre la enciclopedia."
+        )
+
+        st.markdown("#### 🤖 Modelo y parámetros de adecuación")
+        st.write(
+            "La app consulta una enciclopedia generada por el repositorio de training. "
+            "Ese pipeline descarga datos desde GBIF, limpia los registros, crea features, "
+            "entrena una modelo taxonómica y publica los artefactos en Hugging Face."
+        )
+
+        st.link_button(
+            "📊 Ver parámetros de adecuación de la modelo",
+            MODEL_ADEQUACY_URL,
+        )
+        st.link_button(
+            "📦 Ver dataset y artefactos publicados",
+            ARTIFACTS_URL,
+        )
+
 
 def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]:
     """Renderiza controles laterales de búsqueda y filtros."""
@@ -128,6 +204,18 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
     )
 
     st.sidebar.divider()
+    st.sidebar.markdown("### 🌍 Idiomas")
+    st.sidebar.caption(get_supported_languages_text())
+
+    st.sidebar.markdown("### 🧠 Buscador")
+    st.sidebar.caption(SEARCH_MODEL_DESCRIPTION)
+
+    st.sidebar.link_button(
+        "📊 Adecuación de la modelo",
+        MODEL_ADEQUACY_URL,
+    )
+
+    st.sidebar.divider()
     st.sidebar.markdown(
         """
         **Ejemplos útiles**
@@ -135,11 +223,16 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
         - `pajaro rosa`
         - `animal polar hielo`
         - `oso polar`
+        - `білий ведмідь`
         - `insecto mariposa`
+        - `borboleta`
+        - `farfalla`
         - `bicho con alas`
         - `rana verde rio`
+        - `жаба`
         - `ave rapaz montaña`
         - `planta con flor`
+        - `pianta con fiore`
         - `mamifero`
         """
     )
