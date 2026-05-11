@@ -32,13 +32,40 @@ GENERIC_BEAR_TERMS = {
 }
 
 POLAR_TERMS = {
-    "polar", "hielo", "ice", "artico", "artico", "ártico", "arctic", "nieve", "snow",
+    "polar", "hielo", "ice", "artico", "ártico", "arctic", "nieve", "snow",
     "белый", "белая", "полярный", "полярная", "арктический", "арктическая",
     "білий", "біла", "полярний", "полярна", "арктичний", "арктична",
     "gelo", "neve", "ghiaccio",
 }
 
+FELINE_TERMS = {
+    "jaguar", "jaguares", "ягуар", "ягуары", "ягуари",
+    "onca", "onça", "onça-pintada", "onca-pintada",
+    "giaguaro", "giaguari",
+    "panthera", "felidae", "felino", "felinos", "feline", "felines",
+    "gato", "gatos", "cat", "cats", "big cat", "gato grande",
+}
+
+
 INTENT_DEFINITIONS = [
+    SearchIntent(
+        name="jaguar_felidae",
+        terms=FELINE_TERMS,
+        boost_columns={
+            "scientific_name": ["panthera onca", "panthera"],
+            "family": ["felidae"],
+            "genus": ["panthera"],
+            "source_queries": ["jaguar_panthera_onca", "big_cats_felidae"],
+            "search_document": ["jaguar", "panthera onca", "felidae", "felino", "big cat", "ягуар", "onça", "giaguaro"],
+        },
+        boost_value=0.24,
+        precision_columns={
+            "scientific_name": ["panthera onca", "panthera"],
+            "family": ["felidae"],
+            "genus": ["panthera"],
+            "source_queries": ["jaguar_panthera_onca", "big_cats_felidae"],
+        },
+    ),
     SearchIntent(
         name="polar_bear",
         terms=POLAR_TERMS,
@@ -242,7 +269,6 @@ INTENT_DEFINITIONS = [
 
 
 SYNONYM_GROUPS = {
-    # General words
     "animal": "animalia fauna organismo especie",
     "animales": "animalia fauna organismos especies",
     "тварина": "animal animalia fauna",
@@ -250,7 +276,25 @@ SYNONYM_GROUPS = {
     "животное": "animal animalia fauna",
     "животные": "animal animalia fauna",
 
-    # Bear. Important: do not expand generic bear to all Mammalia.
+    "jaguar": "panthera onca felidae felino big cat",
+    "jaguares": "panthera onca felidae felinos big cats",
+    "ягуар": "jaguar panthera onca felidae felino big cat",
+    "ягуары": "jaguar panthera onca felidae felinos big cats",
+    "ягуари": "jaguar panthera onca felidae felinos big cats",
+    "onca": "panthera onca jaguar felidae",
+    "onça": "panthera onca jaguar felidae",
+    "onça-pintada": "panthera onca jaguar felidae",
+    "onca-pintada": "panthera onca jaguar felidae",
+    "giaguaro": "panthera onca jaguar felidae",
+    "giaguari": "panthera onca jaguar felidae",
+    "panthera": "panthera felidae jaguar",
+    "felidae": "felidae felino feline panthera cat",
+    "felino": "felidae feline cat panthera",
+    "felinos": "felidae felines cats panthera",
+    "feline": "felidae felino cat panthera",
+    "cat": "felidae feline felino",
+    "cats": "felidae felines felinos",
+
     "oso": "ursus ursidae bear",
     "osos": "ursus ursidae bears",
     "bear": "ursus ursidae oso",
@@ -265,51 +309,36 @@ SYNONYM_GROUPS = {
     "orso": "ursus ursidae oso bear",
     "orsi": "ursus ursidae osos bears",
 
-    # Polar qualifiers
     "polar": "arctic artico hielo ice nieve snow ursus maritimus oso polar polar bear",
     "hielo": "ice polar arctic ursus maritimus oso polar",
     "ice": "hielo polar arctic ursus maritimus polar bear",
     "белый": "polar hielo ice arctic ursus maritimus oso polar polar bear",
-    "белая": "polar hielo ice arctic ursus maritimus oso polar polar bear",
     "полярный": "polar hielo ice arctic ursus maritimus oso polar polar bear",
-    "полярная": "polar hielo ice arctic ursus maritimus oso polar polar bear",
     "білий": "polar hielo ice arctic ursus maritimus oso polar polar bear",
-    "біла": "polar hielo ice arctic ursus maritimus oso polar polar bear",
     "полярний": "polar hielo ice arctic ursus maritimus oso polar polar bear",
-    "полярна": "polar hielo ice arctic ursus maritimus oso polar polar bear",
     "gelo": "hielo ice polar arctic ursus maritimus",
     "ghiaccio": "hielo ice polar arctic ursus maritimus",
 
-    # Birds
     "pajaro": "pájaro ave aves bird birds alas plumas",
     "pájaro": "pajaro ave aves bird birds alas plumas",
-    "pajaros": "pájaros ave aves bird birds alas plumas",
-    "pájaros": "pajaros ave aves bird birds alas plumas",
     "ave": "aves pajaro bird alas plumas",
     "aves": "ave pajaros birds alas plumas",
     "bird": "ave pajaro aves",
     "birds": "aves pajaros",
     "птица": "ave bird aves pajaro",
-    "птицы": "aves birds pajaros",
     "птах": "ave bird aves pajaro",
-    "птахи": "aves birds pajaros",
     "passaro": "pássaro ave bird pajaro",
     "pássaro": "passaro ave bird pajaro",
     "uccello": "ave bird pajaro",
-    "uccelli": "aves birds pajaros",
 
-    # Pink/flamingo
     "rosa": "rosado pink flamenco flamingo phoenicopterus roseus",
     "rosado": "rosa pink flamenco flamingo phoenicopterus roseus",
     "pink": "rosa rosado flamenco flamingo phoenicopterus roseus",
     "flamenco": "flamingo phoenicopterus roseus pajaro rosa ave rosa humedal",
     "flamingo": "flamenco phoenicopterus roseus pink bird",
     "розовая": "rosa pink flamenco flamingo ave pajaro",
-    "розовый": "rosa pink flamenco flamingo ave pajaro",
     "рожевий": "rosa pink flamenco flamingo ave pajaro",
-    "рожева": "rosa pink flamenco flamingo ave pajaro",
 
-    # Butterflies
     "mariposa": "lepidoptera insecta butterfly polilla",
     "mariposas": "lepidoptera insecta butterflies polillas",
     "butterfly": "lepidoptera insecta mariposa",
@@ -317,71 +346,46 @@ SYNONYM_GROUPS = {
     "polilla": "lepidoptera insecta moth mariposa",
     "moth": "lepidoptera insecta polilla mariposa",
     "бабочка": "lepidoptera mariposa butterfly",
-    "бабочки": "lepidoptera mariposas butterflies",
     "метелик": "lepidoptera mariposa butterfly",
-    "метелики": "lepidoptera mariposas butterflies",
     "borboleta": "lepidoptera mariposa butterfly",
-    "borboletas": "lepidoptera mariposas butterflies",
     "farfalla": "lepidoptera mariposa butterfly",
-    "farfalle": "lepidoptera mariposas butterflies",
 
-    # Amphibians
     "rana": "amphibia anfibio frog agua rio",
     "ranas": "amphibia anfibios frogs agua rio",
     "anfibio": "amphibia rana frog agua",
-    "anfibios": "amphibia ranas frogs agua",
     "frog": "amphibia rana anfibio agua",
-    "frogs": "amphibia ranas anfibios agua",
     "rio": "agua rana amphibia",
     "río": "agua rana amphibia",
     "лягушка": "rana frog amphibia",
-    "лягушки": "ranas frogs amphibia",
     "жаба": "rana frog amphibia",
-    "жабы": "ranas frogs amphibia",
     "sapo": "rana frog amphibia",
     "rã": "rana frog amphibia",
     "rospo": "rana frog amphibia",
 
-    # Raptors
     "rapaz": "ave rapaz accipitridae aguila eagle hawk",
-    "rapaces": "aves rapaces accipitridae aguilas eagles",
     "aguila": "águila eagle ave rapaz accipitridae aquila",
     "águila": "aguila eagle ave rapaz accipitridae aquila",
     "eagle": "aguila ave rapaz accipitridae",
     "hawk": "ave rapaz accipitridae",
     "орел": "aguila eagle ave rapaz accipitridae",
-    "орёл": "aguila eagle ave rapaz accipitridae",
-    "ястреб": "hawk ave rapaz accipitridae",
     "águia": "aguila eagle ave rapaz accipitridae",
-    "aguia": "aguila eagle ave rapaz accipitridae",
     "aquila": "aguila eagle ave rapaz accipitridae",
 
-    # Plants/flowers
     "planta": "plantae plant vegetal",
     "plantas": "plantae plants vegetales",
     "plant": "plantae planta",
     "flor": "plantae flowering flower",
     "flores": "plantae flowering flowers",
     "flower": "plantae flor flowering",
-    "flowers": "plantae flores flowering",
     "растение": "plantae planta plant",
-    "растения": "plantae plantas plants",
     "цветок": "flor flower plantae",
-    "цветы": "flores flowers plantae",
     "рослина": "plantae planta plant",
-    "рослини": "plantae plantas plants",
     "квітка": "flor flower plantae",
-    "квіти": "flores flowers plantae",
     "pianta": "plantae planta plant",
-    "piante": "plantae plantas plants",
     "fiore": "flor flower plantae",
-    "fiori": "flores flowers plantae",
 
-    # Broad classes
     "insecto": "insecta insect bicho",
-    "insectos": "insecta insects bichos",
     "bicho": "insecta insecto animal pequeño",
-    "bichos": "insecta insectos animales pequeños",
     "комаха": "insecta insecto",
     "насекомое": "insecta insecto",
     "inseto": "insecta insecto",
@@ -457,17 +461,12 @@ def get_intent_by_name(name: str) -> SearchIntent:
 
 
 def remove_redundant_intents(intents: list[SearchIntent]) -> list[SearchIntent]:
-    """
-    Evita intenciones demasiado amplias cuando hay una intención específica.
-
-    Ejemplo:
-    - mariposa activa butterfly e insect, pero butterfly es más específico.
-    - oso polar activa polar_bear y bear, pero polar_bear es más específico.
-    """
+    """Evita intenciones demasiado amplias cuando hay una intención específica."""
     names = {intent.name for intent in intents}
 
     redundant_map = {
         "polar_bear": {"bear", "mammal"},
+        "jaguar_felidae": {"mammal"},
         "butterfly": {"insect"},
         "pink_bird": {"bird"},
         "raptor": {"bird"},
@@ -572,13 +571,7 @@ def apply_precision_filter(
     result_df: pd.DataFrame,
     detected_intents: list[SearchIntent],
 ) -> pd.DataFrame:
-    """
-    Filtra resultados residuales cuando la intención es clara.
-
-    Si el usuario busca "mariposa", devolvemos Lepidoptera.
-    Si busca "ведмідь", devolvemos Ursidae/Ursus.
-    Si busca "rana", devolvemos Amphibia.
-    """
+    """Filtra resultados residuales cuando la intención es clara."""
     if result_df.empty:
         return result_df
 
@@ -602,12 +595,12 @@ def apply_precision_filter(
     if not precise_df.empty:
         return apply_relative_threshold(precise_df, minimum_score=0.03)
 
-    return apply_relative_threshold(result_df)
+    return pd.DataFrame(columns=result_df.columns)
 
 
 def apply_relative_threshold(
     result_df: pd.DataFrame,
-    minimum_score: float = 0.004,
+    minimum_score: float = 0.02,
 ) -> pd.DataFrame:
     """Quita resultados con score residual demasiado bajo."""
     if result_df.empty:
@@ -665,11 +658,12 @@ def apply_contradiction_penalties(
         "animal", "pajaro", "pájaro", "ave", "oso", "rana", "mariposa", "insecto", "pez", "mamifero", "mamífero",
         "тварина", "животное", "птица", "птах", "медведь", "ведмідь", "жаба", "лягушка", "бабочка", "метелик",
         "passaro", "pássaro", "uccello", "urso", "orso", "sapo", "rã", "farfalla", "borboleta",
+        "jaguar", "ягуар", "onca", "onça", "giaguaro",
     }
 
     if query_words & animal_words and not query_words & plant_words:
         plant_mask = get_text_column(penalized_df, "kingdom").apply(normalize_text).eq("plantae")
-        penalized_df.loc[plant_mask, "search_score"] *= 0.45
+        penalized_df.loc[plant_mask, "search_score"] *= 0.20
 
     if query_words & plant_words and not query_words & animal_words:
         animal_mask = get_text_column(penalized_df, "kingdom").apply(normalize_text).eq("animalia")
