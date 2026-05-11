@@ -9,21 +9,12 @@ from src.image_loader import find_species_image_url
 
 
 LANGUAGE_FLAGS = [
-    "🇪🇸",
-    "🇬🇧",
-    "🇺🇦",
-    "🇵🇹",
-    "🇮🇹",
-    "🇷🇺",
-]
-
-LANGUAGE_LABELS = [
-    "Español",
-    "English",
-    "Українська",
-    "Português",
-    "Italiano",
-    "Русский",
+    {"code": "es", "label": "Español", "image_url": "https://flagcdn.com/w80/es.png"},
+    {"code": "gb", "label": "English", "image_url": "https://flagcdn.com/w80/gb.png"},
+    {"code": "ua", "label": "Українська", "image_url": "https://flagcdn.com/w80/ua.png"},
+    {"code": "pt", "label": "Português", "image_url": "https://flagcdn.com/w80/pt.png"},
+    {"code": "it", "label": "Italiano", "image_url": "https://flagcdn.com/w80/it.png"},
+    {"code": "ru", "label": "Русский", "image_url": "https://flagcdn.com/w80/ru.png"},
 ]
 
 SEARCH_MODEL_DESCRIPTION = (
@@ -32,28 +23,16 @@ SEARCH_MODEL_DESCRIPTION = (
 )
 
 MODEL_DASHBOARD_URL = "https://biodiversity-finder-training.streamlit.app/"
-
 MODEL_ADEQUACY_URL = MODEL_DASHBOARD_URL
-
-ARTIFACTS_URL = (
-    "https://huggingface.co/datasets/selenamir/"
-    "biodiversity-finder-artifacts"
-)
+ARTIFACTS_URL = "https://huggingface.co/datasets/selenamir/biodiversity-finder-artifacts"
 
 
 def format_coordinate(value: object) -> str:
-    """
-    Formatea coordenadas de forma segura.
-
-    Algunas filas pueden tener NaN, None o texto. En esos casos devolvemos
-    N/A para evitar que Streamlit se rompa con el formato :.3f.
-    """
+    """Formatea coordenadas de forma segura."""
     try:
         if pd.isna(value):
             return "N/A"
-
         return f"{float(value):.3f}"
-
     except (TypeError, ValueError):
         return "N/A"
 
@@ -63,9 +42,7 @@ def format_integer(value: object) -> str:
     try:
         if pd.isna(value):
             return "0"
-
         return f"{int(value):,}"
-
     except (TypeError, ValueError):
         return "0"
 
@@ -75,21 +52,69 @@ def format_score(value: object) -> str:
     try:
         if pd.isna(value):
             return "0.000"
-
         return f"{float(value):.3f}"
-
     except (TypeError, ValueError):
         return "0.000"
 
 
-def get_language_flags_text() -> str:
-    """Devuelve los idiomas como banderas visibles."""
-    return " ".join(LANGUAGE_FLAGS)
-
-
 def get_supported_languages_accessible_text() -> str:
     """Devuelve texto accesible con nombres de idiomas."""
-    return ", ".join(LANGUAGE_LABELS)
+    return ", ".join(language["label"] for language in LANGUAGE_FLAGS)
+
+
+def get_language_flags_html(compact: bool = False) -> str:
+    """
+    Devuelve HTML con iconos reales de banderas.
+
+    No usamos emoji de banderas porque algunos sistemas los muestran como letras.
+    """
+    image_size = 30 if compact else 42
+    gap = 8 if compact else 12
+
+    flag_items = []
+
+    for language in LANGUAGE_FLAGS:
+        label = language["label"]
+        image_url = language["image_url"]
+        flag_items.append(
+            f"""
+            <span title="{label}" style="
+                display: inline-flex;
+                align-items: center;
+                margin-right: {gap}px;
+                margin-bottom: 0.35rem;
+            ">
+                <img
+                    src="{image_url}"
+                    alt="{label}"
+                    width="{image_size}"
+                    style="
+                        border-radius: 5px;
+                        border: 1px solid rgba(0,0,0,0.14);
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+                        vertical-align: middle;
+                    "
+                />
+            </span>
+            """
+        )
+
+    return f"""
+    <div aria-label="{get_supported_languages_accessible_text()}" style="
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: {gap}px;
+        margin: 0.25rem 0 0.5rem 0;
+    ">
+        {"".join(flag_items)}
+    </div>
+    """
+
+
+def render_language_flags(compact: bool = False) -> None:
+    """Renderiza banderas reales como imágenes."""
+    st.markdown(get_language_flags_html(compact=compact), unsafe_allow_html=True)
 
 
 def apply_styles() -> None:
@@ -149,7 +174,7 @@ def render_language_and_metrics_bar() -> None:
 
     with language_column:
         st.markdown("### 🌍 Idiomas de búsqueda")
-        st.markdown(f"## {get_language_flags_text()}")
+        render_language_flags(compact=False)
         st.caption(get_supported_languages_accessible_text())
 
     with metrics_column:
@@ -165,7 +190,7 @@ def render_search_system_info() -> None:
     """Muestra información visible sobre idiomas, búsqueda y modelo."""
     with st.expander("ℹ️ Cómo funciona el buscador", expanded=False):
         st.markdown("#### 🌍 Idiomas")
-        st.markdown(f"## {get_language_flags_text()}")
+        render_language_flags(compact=False)
         st.caption(get_supported_languages_accessible_text())
 
         st.markdown(
@@ -235,7 +260,7 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
 
     st.sidebar.divider()
     st.sidebar.markdown("### 🌍 Idiomas")
-    st.sidebar.markdown(f"### {get_language_flags_text()}")
+    st.sidebar.markdown(get_language_flags_html(compact=True), unsafe_allow_html=True)
     st.sidebar.caption(get_supported_languages_accessible_text())
 
     st.sidebar.markdown("### 🧠 Buscador")
