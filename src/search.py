@@ -19,7 +19,7 @@ SPANISH_SYNONYMS = {
     "rosa": "rosado pink flamenco phoenicopterus roseus",
     "rosado": "rosa pink flamenco phoenicopterus roseus",
     "pink": "rosa rosado flamenco phoenicopterus roseus",
-    "flamenco": "phoenicopterus roseus ave rosa humedal",
+    "flamenco": "phoenicopterus roseus ave rosa humedal laguna marisma",
     "humedal": "wetland laguna marisma ave flamenco",
     "laguna": "humedal wetland flamenco ave",
     "rana": "amphibia anfibio frog",
@@ -38,12 +38,15 @@ SPANISH_SYNONYMS = {
     "insecto": "insecta insect",
     "planta": "plantae magnoliopsida vegetal",
     "flor": "plantae magnoliopsida planta",
-    "rapaz": "aves aguila eagle",
+    "rapaz": "aves aguila eagle aquila",
     "aguila": "aquila chrysaetos ave rapaz",
     "águila": "aquila chrysaetos ave rapaz",
     "montana": "montaña mountain aquila chrysaetos",
     "montaña": "montana mountain aquila chrysaetos",
 }
+
+BIRD_TERMS = {"pajaro", "pajaros", "ave", "aves", "bird", "flamenco", "rapaz", "aguila", "águila"}
+PLANT_TERMS = {"planta", "flor", "vegetal", "arbol", "árbol"}
 
 
 def normalize_text(text: str) -> str:
@@ -54,7 +57,7 @@ def normalize_text(text: str) -> str:
     without_accents = "".join(
         character for character in normalized if not unicodedata.combining(character)
     )
-    return re.sub(r"[^a-z0-9ñ\s]", " ", without_accents)
+    return re.sub(r"[^a-z0-9ñ\s]", " ", without_accents).strip()
 
 
 def expand_query(query_text: str) -> str:
@@ -75,20 +78,16 @@ def expand_query(query_text: str) -> str:
 def semantic_search_encyclopedia(
     encyclopedia_df: pd.DataFrame,
     query_text: str,
-    top_n: int = 50,
+    top_n: int = 20,
 ) -> pd.DataFrame:
     """
-    Busca en la enciclopedia usando TF-IDF y similitud coseno.
-
-    Args:
-        encyclopedia_df: Dataframe de especies agregadas.
-        query_text: Texto escrito por el usuario.
-        top_n: Número máximo de resultados.
-
-    Returns:
-        Dataframe ordenado por puntuación de búsqueda.
+    Busca en la enciclopedia usando TF-IDF, similitud coseno y pequeños ajustes
+    taxonómicos para búsquedas humanas como "pajaro rosa".
     """
     result_df = encyclopedia_df.copy()
+
+    if result_df.empty:
+        return result_df
 
     if "search_document" not in result_df.columns:
         result_df["search_document"] = result_df.apply(build_fallback_document, axis=1)
@@ -109,7 +108,9 @@ def semantic_search_encyclopedia(
     scores = cosine_similarity(matrix[-1], matrix[:-1]).flatten()
 
     result_df["search_score"] = scores
-    result_df = result_df[result_df["search_score"] > 0]
+    result_df = apply_taxonomic_boosts(result_df, query_text)
+
+    result_df = result_df[result_df["search_score"] > 0.005]
 
     return (
         result_df
@@ -117,6 +118,35 @@ def semantic_search_encyclopedia(
         .head(top_n)
         .reset_index(drop=True)
     )
+
+
+def apply_taxonomic_boosts(result_df: pd.DataFrame, query_text: str) -> pd.DataFrame:
+    """
+    Ajusta la puntuación cuando la búsqueda contiene pistas taxonómicas claras.
+
+    Ejemplo:
+    - "pajaro rosa" debe priorizar Aves.
+    - "planta flor" debe priorizar Plantae/Magnoliopsida.
+    """
+    normalized_query = normalize_text(query_text)
+    query_words = set(normalized_query.split())
+
+    result_df = result_df.copy()
+
+    if query_words & BIRD_TERMS:
+        bird_mask = result_df["taxon_class"].fillna("").str.lower().eq("aves")
+        plant_mask = result_df["kingdom"].fillna("").str.lower().eq("plantae")
+
+        result_df.loc[bird_mask, "search_score"] += 0.08
+
+        if not query_words & PLANT_TERMS:
+            result_df.loc[plant_mask, "search_score"] *= 0.35
+
+    if query_words & PLANT_TERMS:
+        plant_mask = result_df["kingdom"].fillna("").str.lower().eq("plantae")
+        result_df.loc[plant_mask, "search_score"] += 0.08
+
+    return result_df
 
 
 def build_fallback_document(row: pd.Series) -> str:

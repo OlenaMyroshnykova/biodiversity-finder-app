@@ -31,13 +31,13 @@ def build_test_encyclopedia() -> pd.DataFrame:
                 "search_document": "Phoenicopterus roseus Aves flamenco rosa humedal pajaro ave",
             },
             {
-                "scientific_name": "Vulpes vulpes",
-                "kingdom": "Animalia",
-                "phylum": "Chordata",
-                "taxon_class": "Mammalia",
-                "family": "Canidae",
-                "genus": "Vulpes",
-                "species": "Vulpes vulpes",
+                "scientific_name": "Rosa canina",
+                "kingdom": "Plantae",
+                "phylum": "Tracheophyta",
+                "taxon_class": "Magnoliopsida",
+                "family": "Rosaceae",
+                "genus": "Rosa",
+                "species": "Rosa canina",
                 "observations": 50,
                 "countries": "ES",
                 "first_year": 2000,
@@ -45,9 +45,9 @@ def build_test_encyclopedia() -> pd.DataFrame:
                 "avg_latitude": 40.0,
                 "avg_longitude": -3.0,
                 "most_common_basis": "HUMAN_OBSERVATION",
-                "most_common_season": "otoño",
-                "profile_text": "Mamífero rojizo de bosque.",
-                "search_document": "Vulpes vulpes Mammalia zorro bosque rojizo",
+                "most_common_season": "primavera",
+                "profile_text": "Planta con flor rosa.",
+                "search_document": "Rosa canina Plantae Magnoliopsida flor rosa planta",
             },
         ]
     )
@@ -71,9 +71,9 @@ def test_expand_query_supports_pajaro_rosa() -> None:
     assert "phoenicopterus" in expanded
 
 
-def test_semantic_search_finds_flamingo_for_pajaro_rosa() -> None:
+def test_semantic_search_finds_flamingo_before_rose_for_pajaro_rosa() -> None:
     """
-    Debe encontrar flamenco al buscar pajaro rosa.
+    Debe priorizar el flamenco frente a la planta Rosa canina.
     """
     result_df = semantic_search_encyclopedia(
         encyclopedia_df=build_test_encyclopedia(),

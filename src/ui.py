@@ -8,54 +8,37 @@ import streamlit as st
 
 def apply_styles() -> None:
     """
-    Aplica estilos CSS personalizados.
+    Aplica estilos CSS personalizados sin depender de HTML complejo.
     """
     css = """
     <style>
     .stApp {
         background:
-            radial-gradient(circle at top left, rgba(46, 125, 50, 0.16), transparent 31%),
-            radial-gradient(circle at bottom right, rgba(33, 150, 243, 0.12), transparent 36%),
-            linear-gradient(135deg, #f4fbf5 0%, #ffffff 48%, #eef6ff 100%);
+            radial-gradient(circle at top left, rgba(46, 125, 50, 0.12), transparent 32%),
+            radial-gradient(circle at bottom right, rgba(33, 150, 243, 0.10), transparent 36%),
+            linear-gradient(135deg, #f5fbf6 0%, #ffffff 50%, #eef6ff 100%);
     }
 
     h1, h2, h3 {
         color: #1b5e20;
     }
 
-    .hero-card {
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(46, 125, 50, 0.18);
-        border-radius: 24px;
-        padding: 1.4rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.08);
+    [data-testid="stMetric"] {
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(46, 125, 50, 0.16);
+        padding: 0.85rem;
+        border-radius: 18px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
     }
 
-    .species-card {
-        background: rgba(255, 255, 255, 0.94);
-        border-left: 8px solid #2e7d32;
-        border-radius: 20px;
-        padding: 1.1rem;
-        margin-bottom: 1rem;
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
     }
 
-    .tag {
-        display: inline-block;
-        padding: 0.22rem 0.62rem;
-        margin: 0.12rem;
-        border-radius: 999px;
-        background: #e8f5e9;
-        border: 1px solid #c8e6c9;
-        color: #1b5e20;
-        font-weight: 600;
-        font-size: 0.86rem;
-    }
-
-    .small-note {
-        color: #4d5d4d;
-        font-size: 0.94rem;
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: rgba(255, 255, 255, 0.88);
+        border-radius: 18px;
     }
     </style>
     """
@@ -67,20 +50,15 @@ def render_header() -> None:
     Renderiza cabecera principal.
     """
     st.title("🐾 Biodiversity Finder")
-    st.markdown(
-        """
-        <div class="hero-card">
-        <b>Enciclopedia inteligente de biodiversidad</b><br>
-        Explora especies a partir de datos reales procesados desde GBIF.
-        Busca con lenguaje natural: <b>pajaro rosa</b>, <b>ave rapaz montaña</b>,
-        <b>rana verde rio</b>, <b>animal polar hielo</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
+
+    st.info(
+        "Enciclopedia inteligente de biodiversidad basada en datos reales de GBIF. "
+        "Busca con lenguaje natural: `pajaro rosa`, `ave rapaz montaña`, "
+        "`rana verde rio`, `animal polar hielo`."
     )
 
 
-def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int]:
+def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]:
     """
     Renderiza controles laterales de búsqueda y filtros.
     """
@@ -92,7 +70,7 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int]:
     )
 
     selected_classes = st.sidebar.multiselect(
-        "Filtrar por clase taxonómica",
+        "Clase taxonómica",
         options=sorted(df["taxon_class"].dropna().unique()),
         default=[],
     )
@@ -104,18 +82,28 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int]:
         value=1,
     )
 
+    max_results = st.sidebar.slider(
+        "Número de resultados",
+        min_value=5,
+        max_value=50,
+        value=15,
+        step=5,
+    )
+
+    st.sidebar.divider()
     st.sidebar.markdown(
         """
-        **Ejemplos:**
-        - pajaro rosa
-        - ave rapaz montaña
-        - rana verde rio
-        - animal polar hielo
-        - planta flor
+        **Ejemplos útiles**
+
+        - `pajaro rosa`
+        - `ave rapaz montaña`
+        - `rana verde rio`
+        - `animal polar hielo`
+        - `planta flor`
         """
     )
 
-    return query_text, selected_classes, min_observations
+    return query_text, selected_classes, min_observations, max_results
 
 
 def apply_basic_filters(
@@ -134,22 +122,21 @@ def apply_basic_filters(
     return filtered_df
 
 
-def render_metrics(df: pd.DataFrame, metrics: dict) -> None:
+def render_metrics(result_df: pd.DataFrame, full_df: pd.DataFrame, metrics: dict) -> None:
     """
     Muestra métricas principales.
     """
     column_1, column_2, column_3, column_4 = st.columns(4)
 
     with column_1:
-        st.metric("Especies mostradas", f"{len(df):,}")
+        st.metric("Resultados", f"{len(result_df):,}")
 
     with column_2:
-        observations = int(df["observations"].sum()) if not df.empty else 0
-        st.metric("Observaciones", f"{observations:,}")
+        observations = int(result_df["observations"].sum()) if not result_df.empty else 0
+        st.metric("Observaciones filtradas", f"{observations:,}")
 
     with column_3:
-        classes = df["taxon_class"].nunique() if not df.empty else 0
-        st.metric("Clases", classes)
+        st.metric("Especies en dataset", f"{len(full_df):,}")
 
     with column_4:
         accuracy = metrics.get("accuracy")
@@ -157,56 +144,66 @@ def render_metrics(df: pd.DataFrame, metrics: dict) -> None:
         st.metric("Accuracy ML", accuracy_text)
 
 
-def render_species_cards(df: pd.DataFrame) -> None:
+def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
     """
-    Renderiza tarjetas de enciclopedia.
+    Renderiza tarjetas limpias de enciclopedia.
     """
-    st.header("📚 Enciclopedia de especies")
-
     if df.empty:
-        st.info("No hay especies para mostrar.")
+        st.warning("No hay especies para mostrar.")
         return
 
-    for _, row in df.head(30).iterrows():
-        search_score = row.get("search_score", 0.0)
+    if query_text.strip():
+        st.caption(f"Resultados para: **{query_text}**")
+    else:
+        st.caption("Mostrando especies con más observaciones.")
 
-        html = f"""
-        <div class="species-card">
-            <h3><i>{row["scientific_name"]}</i></h3>
+    for index, row in df.head(15).iterrows():
+        with st.container(border=True):
+            score = row.get("search_score", 0.0)
 
-            <span class="tag">{row["kingdom"]}</span>
-            <span class="tag">{row["taxon_class"]}</span>
-            <span class="tag">Familia: {row["family"]}</span>
-            <span class="tag">Observaciones: {row["observations"]:,}</span>
-            <span class="tag">Score: {search_score:.3f}</span>
+            title_column, metric_column = st.columns([3, 1])
 
-            <p>{row["profile_text"]}</p>
+            with title_column:
+                st.subheader(f"{index + 1}. *{row['scientific_name']}*")
+                st.caption(
+                    f"{row['kingdom']} · {row['taxon_class']} · "
+                    f"Familia: {row['family']}"
+                )
 
-            <p>
-            <b>Países:</b> {row["countries"]}<br>
-            <b>Periodo:</b> {row["first_year"]}–{row["last_year"]}<br>
-            <b>Registro más común:</b> {row["most_common_basis"]}<br>
-            <b>Estación más frecuente:</b> {row["most_common_season"]}<br>
-            <b>Centro geográfico aproximado:</b>
-            {row["avg_latitude"]:.3f}, {row["avg_longitude"]:.3f}
-            </p>
-        </div>
-        """
-        st.markdown(html, unsafe_allow_html=True)
+            with metric_column:
+                st.metric("Score", f"{score:.3f}")
+                st.metric("Obs.", f"{int(row['observations']):,}")
+
+            st.write(row["profile_text"])
+
+            info_column_1, info_column_2, info_column_3 = st.columns(3)
+
+            with info_column_1:
+                st.markdown(f"**Países:** {row['countries']}")
+                st.markdown(f"**Periodo:** {row['first_year']}–{row['last_year']}")
+
+            with info_column_2:
+                st.markdown(f"**Registro:** {row['most_common_basis']}")
+                st.markdown(f"**Estación:** {row['most_common_season']}")
+
+            with info_column_3:
+                st.markdown(
+                    f"**Centro geográfico:** "
+                    f"{row['avg_latitude']:.3f}, {row['avg_longitude']:.3f}"
+                )
 
 
 def render_data_table(df: pd.DataFrame) -> None:
     """
-    Renderiza tabla final.
+    Renderiza tabla compacta final.
     """
-    st.header("🧾 Tabla de especies")
-
     if df.empty:
         st.info("La tabla está vacía.")
         return
 
     columns = [
         "scientific_name",
+        "kingdom",
         "taxon_class",
         "family",
         "observations",
@@ -224,6 +221,6 @@ def render_data_table(df: pd.DataFrame) -> None:
 
     st.dataframe(
         df[existing_columns],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )

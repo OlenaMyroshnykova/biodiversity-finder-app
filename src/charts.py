@@ -14,18 +14,40 @@ def build_class_distribution_chart(df: pd.DataFrame) -> alt.Chart:
         df.groupby("taxon_class", as_index=False)
         .agg(observations=("observations", "sum"))
         .sort_values("observations", ascending=False)
-        .head(15)
+        .head(12)
     )
 
     return (
         alt.Chart(chart_data)
-        .mark_bar()
+        .mark_bar(cornerRadiusEnd=6)
         .encode(
             x=alt.X("observations:Q", title="Observaciones"),
             y=alt.Y("taxon_class:N", title="Clase", sort="-x"),
             tooltip=["taxon_class", "observations"],
         )
-        .properties(height=390, title="Observaciones por clase taxonómica")
+        .properties(height=300, title="Observaciones por clase")
+    )
+
+
+def build_observations_chart(df: pd.DataFrame) -> alt.Chart:
+    """
+    Muestra las especies con más observaciones.
+    """
+    chart_data = (
+        df.sort_values("observations", ascending=False)
+        .head(12)
+        .copy()
+    )
+
+    return (
+        alt.Chart(chart_data)
+        .mark_bar(cornerRadiusEnd=6)
+        .encode(
+            x=alt.X("observations:Q", title="Observaciones"),
+            y=alt.Y("scientific_name:N", title="Especie", sort="-x"),
+            tooltip=["scientific_name", "taxon_class", "family", "observations"],
+        )
+        .properties(height=300, title="Especies con más observaciones")
     )
 
 
@@ -33,11 +55,11 @@ def build_map_points_chart(df: pd.DataFrame) -> alt.Chart:
     """
     Crea gráfico de distribución geográfica aproximada.
     """
-    chart_data = df.head(500).copy()
+    chart_data = df.dropna(subset=["avg_longitude", "avg_latitude"]).head(500).copy()
 
     return (
         alt.Chart(chart_data)
-        .mark_circle(size=85, opacity=0.68)
+        .mark_circle(size=70, opacity=0.65)
         .encode(
             x=alt.X("avg_longitude:Q", title="Longitud media"),
             y=alt.Y("avg_latitude:Q", title="Latitud media"),
@@ -51,7 +73,7 @@ def build_map_points_chart(df: pd.DataFrame) -> alt.Chart:
                 "avg_longitude",
             ],
         )
-        .properties(height=390, title="Distribución geográfica aproximada")
+        .properties(height=360, title="Distribución geográfica aproximada")
     )
 
 
@@ -63,21 +85,21 @@ def build_search_score_chart(df: pd.DataFrame) -> alt.Chart:
         df = df.copy()
         df["search_score"] = 0.0
 
-    chart_data = df.head(15).copy()
+    chart_data = df.head(12).copy()
 
     return (
         alt.Chart(chart_data)
-        .mark_bar()
+        .mark_bar(cornerRadiusEnd=6)
         .encode(
-            x=alt.X("search_score:Q", title="Puntuación de búsqueda"),
+            x=alt.X("search_score:Q", title="Puntuación"),
             y=alt.Y("scientific_name:N", title="Especie", sort="-x"),
             tooltip=[
                 "scientific_name",
                 "taxon_class",
                 "family",
-                "search_score",
+                alt.Tooltip("search_score:Q", format=".3f"),
                 "observations",
             ],
         )
-        .properties(height=360, title="Ranking de resultados")
+        .properties(height=330, title="Ranking de resultados")
     )
