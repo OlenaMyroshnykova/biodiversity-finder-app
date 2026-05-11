@@ -9,9 +9,7 @@ from src.image_loader import find_species_image_url
 
 
 def apply_styles() -> None:
-    """
-    Aplica estilos CSS personalizados sin depender de HTML complejo.
-    """
+    """Aplica estilos CSS personalizados sin depender de HTML complejo."""
     css = """
     <style>
     .stApp {
@@ -48,27 +46,23 @@ def apply_styles() -> None:
 
 
 def render_header() -> None:
-    """
-    Renderiza cabecera principal.
-    """
+    """Renderiza cabecera principal."""
     st.title("🐾 Biodiversity Finder")
 
     st.info(
         "Enciclopedia inteligente de biodiversidad basada en datos reales de GBIF. "
-        "Busca con lenguaje natural: `pajaro rosa`, `ave rapaz montaña`, "
-        "`rana verde rio`, `animal polar hielo`."
+        "Puedes buscar con lenguaje natural, por ejemplo: `pajaro rosa`, "
+        "`animal polar hielo`, `bicho con alas`, `rana verde rio`, `planta con flor`."
     )
 
 
 def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]:
-    """
-    Renderiza controles laterales de búsqueda y filtros.
-    """
+    """Renderiza controles laterales de búsqueda y filtros."""
     st.sidebar.header("🔎 Búsqueda")
 
     query_text = st.sidebar.text_input(
         "Busca con lenguaje natural",
-        placeholder="pajaro rosa",
+        placeholder="bicho con alas",
     )
 
     selected_classes = st.sidebar.multiselect(
@@ -98,10 +92,14 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
         **Ejemplos útiles**
 
         - `pajaro rosa`
-        - `ave rapaz montaña`
-        - `rana verde rio`
         - `animal polar hielo`
-        - `planta flor`
+        - `oso polar`
+        - `insecto mariposa`
+        - `bicho con alas`
+        - `rana verde rio`
+        - `ave rapaz montaña`
+        - `planta con flor`
+        - `mamifero`
         """
     )
 
@@ -113,9 +111,7 @@ def apply_basic_filters(
     selected_classes: list[str],
     min_observations: int,
 ) -> pd.DataFrame:
-    """
-    Aplica filtros básicos antes de la búsqueda semántica.
-    """
+    """Aplica filtros básicos antes de la búsqueda semántica."""
     filtered_df = df[df["observations"] >= min_observations].copy()
 
     if selected_classes:
@@ -125,9 +121,7 @@ def apply_basic_filters(
 
 
 def render_metrics(result_df: pd.DataFrame, full_df: pd.DataFrame, metrics: dict) -> None:
-    """
-    Muestra métricas principales.
-    """
+    """Muestra métricas principales."""
     column_1, column_2, column_3, column_4 = st.columns(4)
 
     with column_1:
@@ -147,9 +141,7 @@ def render_metrics(result_df: pd.DataFrame, full_df: pd.DataFrame, metrics: dict
 
 
 def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
-    """
-    Renderiza tarjetas limpias de enciclopedia con imágenes.
-    """
+    """Renderiza tarjetas limpias de enciclopedia con imágenes."""
     if df.empty:
         st.warning("No hay especies para mostrar.")
         return
@@ -182,10 +174,13 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
 
                 with title_column:
                     st.subheader(f"{position}. {row['scientific_name']}")
-                    st.caption(
-                        f"{row['kingdom']} · {row['taxon_class']} · "
-                        f"Familia: {row['family']}"
+                    taxonomy_line = (
+                        f"{row.get('kingdom', 'Unknown')} · "
+                        f"{row.get('taxon_class', 'Unknown')} · "
+                        f"Orden: {row.get('taxon_order', 'Unknown')} · "
+                        f"Familia: {row.get('family', 'Unknown')}"
                     )
+                    st.caption(taxonomy_line)
 
                 with metric_column:
                     st.metric("Score", f"{score:.3f}")
@@ -209,11 +204,12 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
                         f"{row['avg_latitude']:.3f}, {row['avg_longitude']:.3f}"
                     )
 
+                    if "source_queries" in row:
+                        st.markdown(f"**Fuente:** {row['source_queries']}")
+
 
 def render_data_table(df: pd.DataFrame) -> None:
-    """
-    Renderiza tabla compacta final.
-    """
+    """Renderiza tabla compacta final."""
     if df.empty:
         st.info("La tabla está vacía.")
         return
@@ -222,11 +218,13 @@ def render_data_table(df: pd.DataFrame) -> None:
         "scientific_name",
         "kingdom",
         "taxon_class",
+        "taxon_order",
         "family",
         "observations",
         "countries",
         "first_year",
         "last_year",
+        "source_queries",
         "avg_latitude",
         "avg_longitude",
     ]
