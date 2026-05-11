@@ -62,63 +62,31 @@ def get_supported_languages_accessible_text() -> str:
     return ", ".join(language["label"] for language in LANGUAGE_FLAGS)
 
 
-def get_language_flags_html(compact: bool = False) -> str:
-    """
-    Devuelve HTML con iconos reales de banderas.
-
-    No usamos emoji de banderas porque algunos sistemas los muestran como letras.
-    """
-    image_size = 30 if compact else 42
-    gap = 8 if compact else 12
-
-    flag_items = []
-
-    for language in LANGUAGE_FLAGS:
-        label = language["label"]
-        image_url = language["image_url"]
-        flag_items.append(
-            f"""
-            <span title="{label}" style="
-                display: inline-flex;
-                align-items: center;
-                margin-right: {gap}px;
-                margin-bottom: 0.35rem;
-            ">
-                <img
-                    src="{image_url}"
-                    alt="{label}"
-                    width="{image_size}"
-                    style="
-                        border-radius: 5px;
-                        border: 1px solid rgba(0,0,0,0.14);
-                        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-                        vertical-align: middle;
-                    "
-                />
-            </span>
-            """
-        )
-
-    return f"""
-    <div aria-label="{get_supported_languages_accessible_text()}" style="
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: {gap}px;
-        margin: 0.25rem 0 0.5rem 0;
-    ">
-        {"".join(flag_items)}
-    </div>
-    """
+def get_language_flag_urls() -> list[str]:
+    """Devuelve URLs de banderas reales."""
+    return [language["image_url"] for language in LANGUAGE_FLAGS]
 
 
 def render_language_flags(compact: bool = False) -> None:
-    """Renderiza banderas reales como imágenes."""
-    st.markdown(get_language_flags_html(compact=compact), unsafe_allow_html=True)
+    """
+    Renderiza banderas reales usando componentes nativos de Streamlit.
+
+    No usamos emoji ni HTML porque algunos sistemas muestran emoji como letras
+    y algunas configuraciones pueden enseñar HTML como texto.
+    """
+    columns = st.columns(len(LANGUAGE_FLAGS))
+    width = 34 if compact else 46
+
+    for column, language in zip(columns, LANGUAGE_FLAGS):
+        with column:
+            st.image(
+                language["image_url"],
+                width=width,
+            )
 
 
 def apply_styles() -> None:
-    """Aplica estilos CSS personalizados sin depender de HTML complejo."""
+    """Aplica estilos CSS personalizados."""
     css = """
     <style>
     .stApp {
@@ -260,7 +228,7 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
 
     st.sidebar.divider()
     st.sidebar.markdown("### 🌍 Idiomas")
-    st.sidebar.markdown(get_language_flags_html(compact=True), unsafe_allow_html=True)
+    render_language_flags(compact=True)
     st.sidebar.caption(get_supported_languages_accessible_text())
 
     st.sidebar.markdown("### 🧠 Buscador")
