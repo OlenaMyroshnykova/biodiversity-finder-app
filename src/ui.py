@@ -5,6 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from src.image_loader import find_species_image_url
+
 
 def apply_styles() -> None:
     """
@@ -146,7 +148,7 @@ def render_metrics(result_df: pd.DataFrame, full_df: pd.DataFrame, metrics: dict
 
 def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
     """
-    Renderiza tarjetas limpias de enciclopedia.
+    Renderiza tarjetas limpias de enciclopedia con imágenes.
     """
     if df.empty:
         st.warning("No hay especies para mostrar.")
@@ -157,40 +159,55 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
     else:
         st.caption("Mostrando especies con más observaciones.")
 
-    for index, row in df.head(15).iterrows():
+    for position, (_, row) in enumerate(df.head(15).iterrows(), start=1):
         with st.container(border=True):
-            score = row.get("search_score", 0.0)
+            image_column, content_column = st.columns([1, 2.4], vertical_alignment="top")
 
-            title_column, metric_column = st.columns([3, 1])
+            with image_column:
+                image_url = find_species_image_url(str(row["scientific_name"]))
 
-            with title_column:
-                st.subheader(f"{index + 1}. *{row['scientific_name']}*")
-                st.caption(
-                    f"{row['kingdom']} · {row['taxon_class']} · "
-                    f"Familia: {row['family']}"
-                )
+                if image_url:
+                    st.image(
+                        image_url,
+                        caption=str(row["scientific_name"]),
+                        width="stretch",
+                    )
+                else:
+                    st.info("Sin foto disponible en GBIF")
 
-            with metric_column:
-                st.metric("Score", f"{score:.3f}")
-                st.metric("Obs.", f"{int(row['observations']):,}")
+            with content_column:
+                score = row.get("search_score", 0.0)
 
-            st.write(row["profile_text"])
+                title_column, metric_column = st.columns([3, 1])
 
-            info_column_1, info_column_2, info_column_3 = st.columns(3)
+                with title_column:
+                    st.subheader(f"{position}. {row['scientific_name']}")
+                    st.caption(
+                        f"{row['kingdom']} · {row['taxon_class']} · "
+                        f"Familia: {row['family']}"
+                    )
 
-            with info_column_1:
-                st.markdown(f"**Países:** {row['countries']}")
-                st.markdown(f"**Periodo:** {row['first_year']}–{row['last_year']}")
+                with metric_column:
+                    st.metric("Score", f"{score:.3f}")
+                    st.metric("Obs.", f"{int(row['observations']):,}")
 
-            with info_column_2:
-                st.markdown(f"**Registro:** {row['most_common_basis']}")
-                st.markdown(f"**Estación:** {row['most_common_season']}")
+                st.write(row["profile_text"])
 
-            with info_column_3:
-                st.markdown(
-                    f"**Centro geográfico:** "
-                    f"{row['avg_latitude']:.3f}, {row['avg_longitude']:.3f}"
-                )
+                info_column_1, info_column_2, info_column_3 = st.columns(3)
+
+                with info_column_1:
+                    st.markdown(f"**Países:** {row['countries']}")
+                    st.markdown(f"**Periodo:** {row['first_year']}–{row['last_year']}")
+
+                with info_column_2:
+                    st.markdown(f"**Registro:** {row['most_common_basis']}")
+                    st.markdown(f"**Estación:** {row['most_common_season']}")
+
+                with info_column_3:
+                    st.markdown(
+                        f"**Centro geográfico:** "
+                        f"{row['avg_latitude']:.3f}, {row['avg_longitude']:.3f}"
+                    )
 
 
 def render_data_table(df: pd.DataFrame) -> None:

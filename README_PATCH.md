@@ -1,24 +1,30 @@
-# UI Patch para Biodiversity Finder App
+# Images Patch para Biodiversity Finder App
 
-Este parche mejora la versión visual de la aplicación:
+Este parche añade fotos a las tarjetas de especies.
 
-- Elimina HTML visible en las tarjetas.
-- Sustituye las tarjetas largas por bloques nativos de Streamlit.
-- Organiza la página en pestañas.
-- Muestra menos resultados por defecto.
-- Mejora la búsqueda `pajaro rosa` priorizando aves frente a plantas.
-- Sustituye `use_container_width=True` por `width="stretch"`.
-- Añade una tabla compacta de resultados.
-- Añade una sección de resumen del dataset.
+## Qué cambia
 
-## Archivos que reemplaza
+- Añade `src/image_loader.py`.
+- Busca imágenes en GBIF en vivo usando el nombre científico.
+- Usa `st.cache_data` para no repetir llamadas constantemente.
+- Muestra una imagen por tarjeta cuando GBIF devuelve una foto.
+- Si GBIF no tiene foto para una especie, la tarjeta sigue funcionando sin imagen.
+- Añade `requests` explícitamente a `requirements.txt`.
+- Añade test básico para validar la extracción de URL de imagen.
+
+## Archivos que reemplaza o añade
 
 ```text
-app.py
-src/search.py
-src/charts.py
+requirements.txt
+src/image_loader.py
 src/ui.py
-tests/test_search.py
+tests/test_image_loader.py
 ```
 
-Copia estos archivos encima de los existentes, ejecuta tests y haz commit.
+## Después de copiar
+
+```bash
+pip install -r requirements.txt
+pytest
+streamlit run app.py
+```
