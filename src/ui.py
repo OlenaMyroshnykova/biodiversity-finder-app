@@ -8,6 +8,47 @@ import streamlit as st
 from src.image_loader import find_species_image_url
 
 
+def format_coordinate(value: object) -> str:
+    """
+    Formatea coordenadas de forma segura.
+
+    Algunas filas pueden tener NaN, None o texto. En esos casos devolvemos
+    N/A para evitar que Streamlit se rompa con el formato :.3f.
+    """
+    try:
+        if pd.isna(value):
+            return "N/A"
+
+        return f"{float(value):.3f}"
+
+    except (TypeError, ValueError):
+        return "N/A"
+
+
+def format_integer(value: object) -> str:
+    """Formatea enteros de forma segura para métricas."""
+    try:
+        if pd.isna(value):
+            return "0"
+
+        return f"{int(value):,}"
+
+    except (TypeError, ValueError):
+        return "0"
+
+
+def format_score(value: object) -> str:
+    """Formatea score de búsqueda de forma segura."""
+    try:
+        if pd.isna(value):
+            return "0.000"
+
+        return f"{float(value):.3f}"
+
+    except (TypeError, ValueError):
+        return "0.000"
+
+
 def apply_styles() -> None:
     """Aplica estilos CSS personalizados sin depender de HTML complejo."""
     css = """
@@ -156,12 +197,12 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
             image_column, content_column = st.columns([1, 2.4], vertical_alignment="top")
 
             with image_column:
-                image_url = find_species_image_url(str(row["scientific_name"]))
+                image_url = find_species_image_url(str(row.get("scientific_name", "")))
 
                 if image_url:
                     st.image(
                         image_url,
-                        caption=str(row["scientific_name"]),
+                        caption=str(row.get("scientific_name", "")),
                         width="stretch",
                     )
                 else:
@@ -173,7 +214,7 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
                 title_column, metric_column = st.columns([3, 1])
 
                 with title_column:
-                    st.subheader(f"{position}. {row['scientific_name']}")
+                    st.subheader(f"{position}. {row.get('scientific_name', 'Unknown species')}")
                     taxonomy_line = (
                         f"{row.get('kingdom', 'Unknown')} · "
                         f"{row.get('taxon_class', 'Unknown')} · "
@@ -183,29 +224,32 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
                     st.caption(taxonomy_line)
 
                 with metric_column:
-                    st.metric("Score", f"{score:.3f}")
-                    st.metric("Obs.", f"{int(row['observations']):,}")
+                    st.metric("Score", format_score(score))
+                    st.metric("Obs.", format_integer(row.get("observations", 0)))
 
-                st.write(row["profile_text"])
+                st.write(row.get("profile_text", "Sin descripción disponible."))
 
                 info_column_1, info_column_2, info_column_3 = st.columns(3)
 
                 with info_column_1:
-                    st.markdown(f"**Países:** {row['countries']}")
-                    st.markdown(f"**Periodo:** {row['first_year']}–{row['last_year']}")
-
-                with info_column_2:
-                    st.markdown(f"**Registro:** {row['most_common_basis']}")
-                    st.markdown(f"**Estación:** {row['most_common_season']}")
-
-                with info_column_3:
+                    st.markdown(f"**Países:** {row.get('countries', 'Unknown')}")
                     st.markdown(
-                        f"**Centro geográfico:** "
-                        f"{row['avg_latitude']:.3f}, {row['avg_longitude']:.3f}"
+                        f"**Periodo:** "
+                        f"{row.get('first_year', 'N/A')}–{row.get('last_year', 'N/A')}"
                     )
 
+                with info_column_2:
+                    st.markdown(f"**Registro:** {row.get('most_common_basis', 'Unknown')}")
+                    st.markdown(f"**Estación:** {row.get('most_common_season', 'Unknown')}")
+
+                with info_column_3:
+                    latitude = format_coordinate(row.get("avg_latitude"))
+                    longitude = format_coordinate(row.get("avg_longitude"))
+
+                    st.markdown(f"**Centro geográfico:** {latitude}, {longitude}")
+
                     if "source_queries" in row:
-                        st.markdown(f"**Fuente:** {row['source_queries']}")
+                        st.markdown(f"**Fuente:** {row.get('source_queries', 'Unknown')}")
 
 
 def render_data_table(df: pd.DataFrame) -> None:
