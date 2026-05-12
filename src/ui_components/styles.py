@@ -33,19 +33,23 @@ def apply_styles() -> None:
 
         .species-image-frame {
             width: 100%;
-            margin: 0;
+            max-width: 360px;
+            margin: 0 auto;
         }
 
         .species-image-frame img {
             width: 100%;
-            height: 280px;
+            aspect-ratio: 4 / 3;
+            height: auto;
             max-height: 280px;
-            object-fit: cover;
+            object-fit: contain;
             object-position: center;
             display: block;
             border-radius: 16px;
             border: 1px solid rgba(15, 23, 42, 0.12);
-            background: #f1f5f9;
+            background:
+                radial-gradient(circle at top left, rgba(22, 163, 74, 0.08), transparent 38%),
+                #f8fafc;
         }
 
         .species-image-frame figcaption {
@@ -54,11 +58,14 @@ def apply_styles() -> None:
             font-size: 0.82rem;
             text-align: center;
             line-height: 1.25;
+            overflow-wrap: anywhere;
         }
 
         .species-image-placeholder {
             width: 100%;
-            height: 280px;
+            max-width: 360px;
+            aspect-ratio: 4 / 3;
+            margin: 0 auto;
             border-radius: 16px;
             border: 1px dashed rgba(15, 23, 42, 0.25);
             background:
@@ -89,10 +96,14 @@ def apply_styles() -> None:
         }
 
         @media (max-width: 768px) {
+            .species-image-frame {
+                max-width: 100%;
+            }
+
             .species-image-frame img,
             .species-image-placeholder {
-                height: 220px;
-                max-height: 220px;
+                max-width: 100%;
+                aspect-ratio: 4 / 3;
             }
         }
         </style>
