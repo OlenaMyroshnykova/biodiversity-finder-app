@@ -8,12 +8,17 @@ import pandas as pd
 import streamlit as st
 
 from src.image_loader import find_species_image_url
+from src.map_components.species_map import render_species_occurrence_map
 from src.sighting_narratives import build_sighting_narrative
 from src.utils.formatting import format_coordinate, format_integer, format_score
 
 
-def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
-    """Renderiza tarjetas de enciclopedia con imágenes y avisos éticos."""
+def render_species_cards(
+    df: pd.DataFrame,
+    query_text: str,
+    occurrence_points_df: pd.DataFrame | None = None,
+) -> None:
+    """Renderiza tarjetas de enciclopedia con imágenes, avisos y mapa por especie."""
     if df.empty:
         st.warning("No hay especies para mostrar.")
         return
@@ -59,9 +64,33 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
             with content_column:
                 render_species_card_content(position, row)
 
+            render_card_map_section(row, occurrence_points_df)
+
+
+def render_card_map_section(
+    row: pd.Series,
+    occurrence_points_df: pd.DataFrame | None,
+) -> None:
+    """Añade mapa desplegable para una especie concreta."""
+    if occurrence_points_df is None:
+        return
+
+    scientific_name = str(row.get("scientific_name", "")).strip()
+
+    if not scientific_name:
+        return
+
+    with st.expander("🗺️ Ver mapa de avistamientos para esta especie", expanded=False):
+        render_species_occurrence_map(
+            occurrence_points_df=occurrence_points_df,
+            selected_species_name=scientific_name,
+            height=360,
+            max_points=200,
+        )
+
 
 def render_fixed_species_image(image_url: str, caption: str) -> None:
-    """Renderiza imagen con tamaño fijo y recorte elegante."""
+    """Renderiza imagen con tamaño responsive."""
     safe_url = html.escape(image_url, quote=True)
     safe_caption = html.escape(caption)
 

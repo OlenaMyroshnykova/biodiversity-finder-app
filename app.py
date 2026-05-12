@@ -10,7 +10,7 @@ from src.charts import (
     build_map_points_chart,
     build_search_score_chart,
 )
-from src.map_components.species_map import render_species_occurrence_map
+from src.map_components.species_map import render_results_occurrence_map
 from src.natural_language_query import apply_natural_language_filters
 from src.plotly_charts import (
     build_plotly_class_distribution,
@@ -83,7 +83,7 @@ def main() -> None:
     tabs = st.tabs(
         [
             "📚 Resultados",
-            "🗺️ Mapa Folium",
+            "🗺️ Mapa combinado",
             "📊 Gráficos",
             "✨ Plotly EDA",
             "🧾 Datos",
@@ -91,21 +91,33 @@ def main() -> None:
     )
 
     with tabs[0]:
-        render_species_cards(result_df, query_text=query_text)
+        render_species_cards(
+            result_df,
+            query_text=query_text,
+            occurrence_points_df=occurrence_points_df,
+        )
 
     with tabs[1]:
-        species_for_map = selected_species_for_map
-
-        if not species_for_map and not result_df.empty:
-            species_for_map = str(result_df.iloc[0].get("scientific_name", ""))
-
         st.caption(
-            "Mapa dinámico con coordenadas de avistamiento disponibles en el dataset."
+            "Mapa combinado con coordenadas disponibles para los resultados actuales."
         )
-        render_species_occurrence_map(
-            occurrence_points_df=occurrence_points_df,
-            selected_species_name=species_for_map,
-        )
+
+        if selected_species_for_map:
+            from src.map_components.species_map import render_species_occurrence_map
+
+            render_species_occurrence_map(
+                occurrence_points_df=occurrence_points_df,
+                selected_species_name=selected_species_for_map,
+                height=520,
+                max_points=500,
+            )
+        else:
+            render_results_occurrence_map(
+                occurrence_points_df=occurrence_points_df,
+                result_df=result_df,
+                height=520,
+                max_points=500,
+            )
 
     with tabs[2]:
         if result_df.empty:
