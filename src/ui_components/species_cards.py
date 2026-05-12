@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import html
+
 import pandas as pd
 import streamlit as st
 
@@ -21,6 +23,8 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
     else:
         st.caption("Mostrando especies con más observaciones.")
 
+    used_image_urls: set[str] = set()
+
     for position, (_, row) in enumerate(df.head(15).iterrows(), start=1):
         is_threatened = bool(row.get("is_threatened", False))
 
@@ -38,19 +42,51 @@ def render_species_cards(df: pd.DataFrame, query_text: str) -> None:
             image_column, content_column = st.columns([1, 2.4], vertical_alignment="top")
 
             with image_column:
-                image_url = find_species_image_url(str(row.get("scientific_name", "")))
+                image_url = find_species_image_url(
+                    str(row.get("scientific_name", "")),
+                    excluded_urls=used_image_urls,
+                )
 
                 if image_url:
-                    st.image(
-                        image_url,
+                    used_image_urls.add(image_url)
+                    render_fixed_species_image(
+                        image_url=image_url,
                         caption=str(row.get("scientific_name", "")),
-                        width="stretch",
                     )
                 else:
-                    st.info("Sin foto disponible")
+                    render_species_image_placeholder()
 
             with content_column:
                 render_species_card_content(position, row)
+
+
+def render_fixed_species_image(image_url: str, caption: str) -> None:
+    """Renderiza imagen con tamaño fijo y recorte elegante."""
+    safe_url = html.escape(image_url, quote=True)
+    safe_caption = html.escape(caption)
+
+    st.markdown(
+        f"""
+        <figure class="species-image-frame">
+            <img src="{safe_url}" alt="{safe_caption}" loading="lazy">
+            <figcaption>{safe_caption}</figcaption>
+        </figure>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_species_image_placeholder() -> None:
+    """Muestra placeholder cuando no hay imagen fiable."""
+    st.markdown(
+        """
+        <div class="species-image-placeholder">
+            <div class="species-image-placeholder-icon">🌿</div>
+            <div>Imagen no disponible</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_species_card_content(position: int, row: pd.Series) -> None:
