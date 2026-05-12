@@ -55,6 +55,7 @@ def semantic_search_encyclopedia(
 
     if not query_text.strip():
         result_df["search_score"] = 0.0
+
         return (
             result_df
             .sort_values("observations", ascending=False)
@@ -79,7 +80,10 @@ def semantic_search_encyclopedia(
         ngram_range=(3, 5),
     )
 
-    result_df["search_score"] = (word_scores * 0.70) + (char_scores * 0.30)
+    # Fuzzy por caracteres se conserva, pero no debe dominar nombres exactos.
+    result_df["word_score"] = word_scores
+    result_df["char_score"] = char_scores
+    result_df["search_score"] = (word_scores * 0.85) + (char_scores * 0.15)
 
     result_df = boost_exact_text_matches(result_df, query_text)
     result_df = apply_score_thresholds(result_df)

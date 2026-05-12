@@ -1,17 +1,51 @@
-"""Filtros genéricos contra resultados débiles."""
+"""Filtros y boosts genéricos para resultados de búsqueda.
+
+La búsqueda mantiene fuzzy matching, pero prioriza nombres comunes exactos.
+Ejemplo:
+
+- `lion` dentro de `Allionia` es solo una coincidencia débil por caracteres.
+- `lion` como token completo en `vernacular_names` es una coincidencia fuerte.
+"""
 
 from __future__ import annotations
 
+import re
+
 import pandas as pd
+
+from src.search_components.normalizer import normalize_text
+
+
+HIGH_PRIORITY_COLUMNS = [
+    "vernacular_names",
+]
+
+MEDIUM_HIGH_PRIORITY_COLUMNS = [
+    "scientific_name",
+    "species",
+    "genus",
+]
+
+MEDIUM_PRIORITY_COLUMNS = [
+    "family",
+    "taxon_order",
+    "taxon_class",
+    "kingdom",
+]
+
+LOW_PRIORITY_COLUMNS = [
+    "profile_text",
+    "search_document",
+]
 
 
 def apply_score_thresholds(
     result_df: pd.DataFrame,
     *,
-    minimum_score: float = 0.035,
-    relative_ratio: float = 0.18,
+    minimum_score: float = 0.015,
+    relative_ratio: float = 0.08,
 ) -> pd.DataFrame:
-    """Quita resultados con coincidencia residual demasiado baja."""
+    """Quita solo coincidencias residuales extremadamente bajas."""
     if result_df.empty or "search_score" not in result_df.columns:
         return result_df
 
@@ -29,30 +63,66 @@ def boost_exact_text_matches(
     result_df: pd.DataFrame,
     query_text: str,
 ) -> pd.DataFrame:
-    """Da un pequeño boost a coincidencias exactas en nombres y taxonomía."""
+    """Añade boosts por coincidencias exactas de token o frase.
+
+    Importante:
+    No se usa substring simple para el boost.
+    `lion` no recibe boost por estar dentro de `Allionia`.
+    """
     if result_df.empty or not query_text.strip():
         return result_df
 
     boosted_df = result_df.copy()
-    normalized_query = query_text.strip().lower()
+    normalized_query = normalize_text(query_text)
 
-    exact_columns = [
-        "scientific_name",
-        "vernacular_names",
-        "genus",
-        "family",
-        "taxon_order",
-        "taxon_class",
-        "kingdom",
+    if not normalized_query:
+        return boosted_df
+
+    boost_groups = [
+        (HIGH_PRIORITY_COLUMNS, 2.00),
+        (MEDIUM_HIGH_PRIORITY_COLUMNS, 1.25),
+        (MEDIUM_PRIORITY_COLUMNS, 0.60),
+        (LOW_PRIORITY_COLUMNS, 0.35),
     ]
 
-    for column in exact_columns:
-        if column not in boosted_df.columns:
-            continue
+    boosted_df["exact_match_score"] = 0.0
 
-        column_text = boosted_df[column].fillna("").astype(str).str.lower()
-        exact_mask = column_text.str.contains(normalized_query, case=False, regex=False)
+    for columns, boost_value in boost_groups:
+        for column in columns:
+            if column not in boosted_df.columns:
+                continue
 
-        boosted_df.loc[exact_mask, "search_score"] += 0.12
+            exact_mask = boosted_df[column].apply(
+                lambda value: has_exact_token_or_phrase_match(value, normalized_query)
+            )
+
+            boosted_df.loc[exact_mask, "exact_match_score"] += boost_value
+
+    boosted_df["search_score"] = (
+        boosted_df["search_score"].fillna(0)
+        + boosted_df["exact_match_score"].fillna(0)
+    )
 
     return boosted_df
+
+
+def has_exact_token_or_phrase_match(value: object, normalized_query: str) -> bool:
+    """Comprueba coincidencia exacta de palabra o frase normalizada."""
+    normalized_value = normalize_text(value)
+
+    if not normalized_value or not normalized_query:
+        return False
+
+    query_tokens = normalized_query.split()
+
+    if not query_tokens:
+        return False
+
+    if len(query_tokens) == 1:
+        value_tokens = set(normalized_value.split())
+
+        return query_tokens[0] in value_tokens
+
+    pattern = r"(^|\s)" + re.escape(normalized_query) + r"($|\s)"
+
+    return re.search(pattern, normalized_value) is not None
