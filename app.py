@@ -10,7 +10,6 @@ from src.charts import (
     build_map_points_chart,
     build_search_score_chart,
 )
-from src.map_components.species_map import render_results_occurrence_map
 from src.natural_language_query import apply_natural_language_filters
 from src.plotly_charts import (
     build_plotly_class_distribution,
@@ -49,7 +48,6 @@ def main() -> None:
         selected_classes,
         min_observations,
         max_results,
-        selected_species_for_map,
     ) = render_sidebar_controls(encyclopedia_df)
 
     filtered_df = apply_basic_filters(
@@ -83,7 +81,6 @@ def main() -> None:
     tabs = st.tabs(
         [
             "📚 Resultados",
-            "🗺️ Mapa combinado",
             "📊 Gráficos",
             "✨ Plotly EDA",
             "🧾 Datos",
@@ -91,6 +88,10 @@ def main() -> None:
     )
 
     with tabs[0]:
+        st.caption(
+            "Cada resultado tiene su propio mapa en la sección "
+            "`🗺️ Ver mapa de avistamientos para esta especie`."
+        )
         render_species_cards(
             result_df,
             query_text=query_text,
@@ -98,28 +99,6 @@ def main() -> None:
         )
 
     with tabs[1]:
-        st.caption(
-            "Mapa combinado con coordenadas disponibles para los resultados actuales."
-        )
-
-        if selected_species_for_map:
-            from src.map_components.species_map import render_species_occurrence_map
-
-            render_species_occurrence_map(
-                occurrence_points_df=occurrence_points_df,
-                selected_species_name=selected_species_for_map,
-                height=520,
-                max_points=500,
-            )
-        else:
-            render_results_occurrence_map(
-                occurrence_points_df=occurrence_points_df,
-                result_df=result_df,
-                height=520,
-                max_points=500,
-            )
-
-    with tabs[2]:
         if result_df.empty:
             st.warning("No se encontraron resultados. Prueba con otra búsqueda o cambia los filtros.")
         else:
@@ -134,7 +113,7 @@ def main() -> None:
             with chart_column_2:
                 st.altair_chart(build_map_points_chart(result_df), width="stretch")
 
-    with tabs[3]:
+    with tabs[2]:
         if result_df.empty:
             st.warning("No hay datos para graficar.")
         else:
@@ -155,7 +134,7 @@ def main() -> None:
                 if plotly_chart_3 is not None:
                     st.plotly_chart(plotly_chart_3, width="stretch")
 
-    with tabs[4]:
+    with tabs[3]:
         render_data_table(result_df)
 
 

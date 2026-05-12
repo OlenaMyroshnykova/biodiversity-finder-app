@@ -10,7 +10,7 @@ from src.ui_components.config import MODEL_DASHBOARD_URL, SEARCH_MODEL_DESCRIPTI
 from src.ui_components.language_flags import render_language_block
 
 
-def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int, str]:
+def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]:
     """Renderiza controles laterales."""
     render_language_block()
 
@@ -42,18 +42,13 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int,
         step=5,
     )
 
-    selected_species_for_map = ""
-
-    if not df.empty and "scientific_name" in df.columns:
-        selected_species_for_map = st.sidebar.selectbox(
-            "Especie para mapa Folium",
-            options=[""] + sorted(df["scientific_name"].dropna().astype(str).unique().tolist())[:5000],
-            index=0,
-        )
-
     st.sidebar.divider()
-    st.sidebar.markdown("### 🧠 Buscador")
+    st.sidebar.markdown("### 🌸 Buscador")
     st.sidebar.caption(SEARCH_MODEL_DESCRIPTION)
+    st.sidebar.caption(
+        "Los mapas están dentro de cada tarjeta de especie, "
+        "en la sección desplegable de avistamientos."
+    )
     st.sidebar.caption(describe_offline_mode())
 
     st.sidebar.link_button(
@@ -78,4 +73,4 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int,
         """
     )
 
-    return query_text, selected_classes, min_observations, max_results, selected_species_for_map
+    return query_text, selected_classes, min_observations, max_results
