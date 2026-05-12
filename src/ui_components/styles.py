@@ -31,17 +31,22 @@ def apply_styles() -> None:
             font-weight: 700;
         }
 
+        /*
+        Responsive species image box.
+
+        La caja ocupa todo el ancho útil de la columna, pero mantiene una
+        proporción visual estable. La altura escala con la pantalla mediante
+        clamp(), así no queda ni gigante ni aplastada al cambiar el zoom.
+        */
         .species-image-frame {
             width: 100%;
-            max-width: 360px;
-            margin: 0 auto;
+            margin: 0;
         }
 
         .species-image-frame img {
             width: 100%;
+            height: clamp(220px, 24vw, 420px);
             aspect-ratio: 4 / 3;
-            height: auto;
-            max-height: 280px;
             object-fit: contain;
             object-position: center;
             display: block;
@@ -63,9 +68,8 @@ def apply_styles() -> None:
 
         .species-image-placeholder {
             width: 100%;
-            max-width: 360px;
+            height: clamp(220px, 24vw, 420px);
             aspect-ratio: 4 / 3;
-            margin: 0 auto;
             border-radius: 16px;
             border: 1px dashed rgba(15, 23, 42, 0.25);
             background:
@@ -96,14 +100,9 @@ def apply_styles() -> None:
         }
 
         @media (max-width: 768px) {
-            .species-image-frame {
-                max-width: 100%;
-            }
-
             .species-image-frame img,
             .species-image-placeholder {
-                max-width: 100%;
-                aspect-ratio: 4 / 3;
+                height: clamp(200px, 64vw, 360px);
             }
         }
         </style>
