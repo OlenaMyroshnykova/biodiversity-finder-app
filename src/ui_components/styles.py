@@ -1,4 +1,4 @@
-"""Estilos globales."""
+"""Estilos visuales de la app."""
 
 from __future__ import annotations
 
@@ -6,32 +6,42 @@ import streamlit as st
 
 
 def apply_styles() -> None:
-    """Aplica estilos CSS personalizados."""
-    css = """
-    <style>
-    .stApp {
-        background:
-            radial-gradient(circle at top left, rgba(46, 125, 50, 0.12), transparent 32%),
-            radial-gradient(circle at bottom right, rgba(33, 150, 243, 0.10), transparent 36%),
-            linear-gradient(135deg, #f5fbf6 0%, #ffffff 50%, #eef6ff 100%);
-    }
+    """Aplica CSS básico."""
+    st.markdown(
+        """
+        <style>
+        .stApp {
+            background:
+                radial-gradient(circle at top left, rgba(37, 99, 235, 0.10), transparent 32%),
+                radial-gradient(circle at bottom right, rgba(22, 163, 74, 0.12), transparent 35%),
+                linear-gradient(135deg, #f8fafc 0%, #eef7f0 100%);
+        }
 
-    h1, h2, h3 {
-        color: #1b5e20;
-    }
+        .block-container {
+            padding-top: 2rem;
+        }
 
-    [data-testid="stMetric"] {
-        background: rgba(255, 255, 255, 0.88);
-        border: 1px solid rgba(46, 125, 50, 0.16);
-        padding: 0.85rem;
-        border-radius: 18px;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
-    }
+        .threatened-card-label {
+            border: 2px solid #dc2626;
+            background: #fef2f2;
+            color: #7f1d1d;
+            border-radius: 14px;
+            padding: 0.65rem 0.9rem;
+            margin: 1rem 0 0.4rem 0;
+            font-weight: 700;
+        }
 
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-    }
-    </style>
-    """
-    st.markdown(css, unsafe_allow_html=True)
+        [data-testid="stMetric"] {
+            background: rgba(255, 255, 255, 0.75);
+            border-radius: 14px;
+            padding: 0.5rem;
+            border: 1px solid rgba(15, 23, 42, 0.08);
+        }
+
+        div[data-testid="stAlert"] {
+            border-radius: 14px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )

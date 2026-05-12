@@ -4,5 +4,7 @@ scikit-learn
 altair
 pyarrow
 huggingface_hub
-requests
 pytest
+plotly
+folium
+streamlit-folium

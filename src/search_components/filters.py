@@ -1,11 +1,4 @@
-"""Filtros y boosts genéricos para resultados de búsqueda.
-
-La búsqueda mantiene fuzzy matching, pero prioriza nombres comunes exactos.
-Ejemplo:
-
-- `lion` dentro de `Allionia` es solo una coincidencia débil por caracteres.
-- `lion` como token completo en `vernacular_names` es una coincidencia fuerte.
-"""
+"""Filtros y boosts genéricos para resultados de búsqueda."""
 
 from __future__ import annotations
 
@@ -18,6 +11,7 @@ from src.search_components.normalizer import normalize_text
 
 HIGH_PRIORITY_COLUMNS = [
     "vernacular_names",
+    "tags_de_busqueda",
 ]
 
 MEDIUM_HIGH_PRIORITY_COLUMNS = [
@@ -31,6 +25,9 @@ MEDIUM_PRIORITY_COLUMNS = [
     "taxon_order",
     "taxon_class",
     "kingdom",
+    "habitat_tag",
+    "size_tag",
+    "color_tag",
 ]
 
 LOW_PRIORITY_COLUMNS = [
@@ -45,7 +42,7 @@ def apply_score_thresholds(
     minimum_score: float = 0.015,
     relative_ratio: float = 0.08,
 ) -> pd.DataFrame:
-    """Quita solo coincidencias residuales extremadamente bajas."""
+    """Quita coincidencias residuales extremadamente bajas."""
     if result_df.empty or "search_score" not in result_df.columns:
         return result_df
 
@@ -63,12 +60,7 @@ def boost_exact_text_matches(
     result_df: pd.DataFrame,
     query_text: str,
 ) -> pd.DataFrame:
-    """Añade boosts por coincidencias exactas de token o frase.
-
-    Importante:
-    No se usa substring simple para el boost.
-    `lion` no recibe boost por estar dentro de `Allionia`.
-    """
+    """Añade boosts por coincidencias exactas de token o frase."""
     if result_df.empty or not query_text.strip():
         return result_df
 

@@ -1,14 +1,4 @@
-"""Motor genérico del buscador.
-
-Este motor no contiene reglas para animales concretos.
-La inteligencia principal viene de los datos enriquecidos:
-
-- scientific_name
-- vernacular_names
-- taxonomía
-- profile_text
-- search_document
-"""
+"""Motor genérico del buscador."""
 
 from __future__ import annotations
 
@@ -37,6 +27,12 @@ SEARCH_DOCUMENT_COLUMNS = [
     "countries",
     "source_queries",
     "profile_text",
+    "conservation_status",
+    "conservation_category",
+    "color_tag",
+    "habitat_tag",
+    "size_tag",
+    "tags_de_busqueda",
 ]
 
 
@@ -80,7 +76,6 @@ def semantic_search_encyclopedia(
         ngram_range=(3, 5),
     )
 
-    # Fuzzy por caracteres se conserva, pero no debe dominar nombres exactos.
     result_df["word_score"] = word_scores
     result_df["char_score"] = char_scores
     result_df["search_score"] = (word_scores * 0.85) + (char_scores * 0.15)
