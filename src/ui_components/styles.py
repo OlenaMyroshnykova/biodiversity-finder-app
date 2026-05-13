@@ -5,48 +5,67 @@ import streamlit as st
 
 
 def apply_styles() -> None:
-    """Apply CSS used by cards and responsive species images."""
+    """Apply lightweight responsive CSS."""
     st.markdown(
         """
         <style>
+        .stApp {
+            background: linear-gradient(135deg, #f8fbf6 0%, #eef7ee 100%);
+        }
+
         .species-image-frame {
             width: 100%;
             max-width: 360px;
             margin: 0 auto 0.75rem auto;
-            border-radius: 18px;
+            border: 1px solid rgba(49, 94, 59, 0.18);
+            border-radius: 16px;
             overflow: hidden;
-            background: rgba(15, 23, 42, 0.06);
-            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: #f7faf7;
+            box-shadow: 0 8px 24px rgba(31, 61, 40, 0.08);
         }
 
         .species-image-frame img {
+            display: block;
             width: 100%;
             height: clamp(220px, 24vw, 420px);
             aspect-ratio: 4 / 3;
             object-fit: contain;
-            display: block;
+            background: #f7faf7;
         }
 
-        .species-image-caption {
-            font-size: 0.82rem;
-            color: #64748b;
-            padding: 0.35rem 0.55rem 0.5rem 0.55rem;
+        .species-image-frame figcaption {
+            padding: 0.6rem 0.8rem;
             text-align: center;
+            color: #56705a;
+            font-size: 0.88rem;
+            background: rgba(238, 247, 238, 0.92);
         }
 
         .species-image-placeholder {
             width: 100%;
             max-width: 360px;
             height: clamp(220px, 24vw, 420px);
-            border-radius: 18px;
-            border: 1px dashed rgba(148, 163, 184, 0.55);
+            aspect-ratio: 4 / 3;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             justify-content: center;
-            text-align: center;
-            color: #64748b;
-            background: rgba(241, 245, 249, 0.55);
+            align-items: center;
+            gap: 0.35rem;
             margin: 0 auto 0.75rem auto;
+            border: 1px dashed rgba(49, 94, 59, 0.25);
+            border-radius: 16px;
+            background: #f7faf7;
+            color: #56705a;
+            text-align: center;
+        }
+
+        .species-image-placeholder span {
+            font-weight: 700;
+        }
+
+        .species-image-placeholder small {
+            padding: 0 1rem;
+            opacity: 0.8;
         }
 
         @media (max-width: 768px) {
