@@ -1,8 +1,8 @@
 """DataFrame filtering helpers for the Streamlit app.
 
-This module is intentionally small and dependency-free because it is imported by
-both the UI and the test suite. The app scope is Animalia + Plantae; Fungi and
-other kingdoms are filtered out before sidebar class filters are applied.
+The app scope is Animalia + Plantae. Sidebar filters are generated from the
+current artifact, but this module also protects the app from old artifacts that
+may still contain Fungi or other kingdoms.
 """
 from __future__ import annotations
 
@@ -24,7 +24,6 @@ ALL_CLASS_OPTIONS: set[str] = {
 
 
 def _normalize_text(value: Any) -> str:
-    """Return a stripped string without converting NaN-like values to useful text."""
     if value is None:
         return ""
     try:
@@ -36,13 +35,7 @@ def _normalize_text(value: Any) -> str:
 
 
 def _as_clean_list(value: object) -> list[str]:
-    """Normalize a sidebar value to a clean list of strings.
-
-    Streamlit widgets may return a single string, a tuple, a list, None, or an
-    empty selection. Older versions of this helper checked membership before
-    checking whether the value was a list, which raised ``TypeError`` for list
-    values. Keep list handling first.
-    """
+    """Normalize a sidebar value to a clean list of strings."""
     if value is None:
         return []
 
@@ -67,37 +60,23 @@ def _as_clean_list(value: object) -> list[str]:
 
 
 def filter_project_scope(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only the project scope: animals and plants.
-
-    If the dataset does not contain a ``kingdom`` column, the function returns a
-    copy unchanged. This keeps the helper safe for small unit-test fixtures.
-    """
-    if df is None or df.empty:
-        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
-
-    result = df.copy()
-    if "kingdom" not in result.columns:
-        return result
-
-    kingdoms = result["kingdom"].fillna("").astype(str).str.strip()
-    return result.loc[kingdoms.isin(PROJECT_SCOPE_KINGDOMS)].copy()
+    """Keep only animals and plants when the kingdom column exists."""
+    if df is None or not isinstance(df, pd.DataFrame):
+        return pd.DataFrame()
+    if df.empty or "kingdom" not in df.columns:
+        return df.copy()
+    kingdoms = df["kingdom"].fillna("").astype(str).str.strip()
+    return df.loc[kingdoms.isin(PROJECT_SCOPE_KINGDOMS)].copy()
 
 
 def get_available_taxon_classes(df: pd.DataFrame) -> list[str]:
     """Return taxonomic classes available in the current dataset scope."""
-    if df is None or df.empty or "taxon_class" not in df.columns:
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or "taxon_class" not in df.columns:
         return []
-
     scoped = filter_project_scope(df)
     if scoped.empty or "taxon_class" not in scoped.columns:
         return []
-
-    classes = (
-        scoped["taxon_class"]
-        .dropna()
-        .astype(str)
-        .str.strip()
-    )
+    classes = scoped["taxon_class"].dropna().astype(str).str.strip()
     classes = classes[classes != ""]
     return sorted(classes.unique().tolist())
 
@@ -107,14 +86,12 @@ def apply_taxon_class_filter(
     selected_classes: object | None = None,
 ) -> pd.DataFrame:
     """Filter a dataframe by selected taxonomic classes."""
-    if df is None or df.empty:
-        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
-
+    if df is None or not isinstance(df, pd.DataFrame):
+        return pd.DataFrame()
     result = df.copy()
     selected = _as_clean_list(selected_classes)
     if not selected or "taxon_class" not in result.columns:
         return result
-
     taxon_class = result["taxon_class"].fillna("").astype(str).str.strip()
     return result.loc[taxon_class.isin(selected)].copy()
 
@@ -123,19 +100,16 @@ def apply_min_observations_filter(
     df: pd.DataFrame,
     min_observations: int | float | str | None = 0,
 ) -> pd.DataFrame:
-    """Filter by the observations column when it exists."""
-    if df is None or df.empty:
-        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
-
+    """Filter by observations when the column exists."""
+    if df is None or not isinstance(df, pd.DataFrame):
+        return pd.DataFrame()
     result = df.copy()
-    if "observations" not in result.columns:
+    if result.empty or "observations" not in result.columns:
         return result
-
     try:
         minimum = float(min_observations or 0)
     except (TypeError, ValueError):
         minimum = 0.0
-
     observations = pd.to_numeric(result["observations"], errors="coerce").fillna(0)
     return result.loc[observations >= minimum].copy()
 
@@ -144,10 +118,9 @@ def apply_conservation_filter(
     df: pd.DataFrame,
     conservation_filter: str | None = None,
 ) -> pd.DataFrame:
-    """Apply an optional conservation filter used by the sidebar."""
-    if df is None or df.empty:
-        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
-
+    """Apply optional conservation filter."""
+    if df is None or not isinstance(df, pd.DataFrame):
+        return pd.DataFrame()
     result = df.copy()
     option = _normalize_text(conservation_filter).lower()
     if not option or option in {"all", "todos", "todas", "all species"}:
@@ -192,17 +165,9 @@ def apply_basic_filters(
     min_observations: int | float | str | None = 0,
     conservation_filter: str | None = None,
 ) -> pd.DataFrame:
-    """Apply the app's basic sidebar filters in a stable order.
-
-    Order matters:
-    1. project scope, so Fungi cannot reappear even if selected by an old UI;
-    2. minimum observations;
-    3. selected taxonomic classes;
-    4. optional conservation status.
-    """
-    if df is None:
+    """Apply sidebar filters in a stable order."""
+    if df is None or not isinstance(df, pd.DataFrame):
         return pd.DataFrame()
-
     result = filter_project_scope(df)
     result = apply_min_observations_filter(result, min_observations)
     result = apply_taxon_class_filter(result, selected_classes)

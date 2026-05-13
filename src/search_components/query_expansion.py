@@ -1,99 +1,97 @@
-"""Query expansion helpers for fallback name search.
+"""Query expansion for fallback name search.
 
-The structured vibe search remains Spanish + English. This module only expands
-common-name fallback queries and keeps concrete species aliases out of the
-generic category dictionary.
+This module keeps two concepts separate:
+- ``GENERIC_CATEGORY_SYNONYMS``: broad categories only. Tests use this dictionary
+  to ensure we do not hide species-specific hacks inside generic vocabulary.
+- ``EXACT_NAME_SYNONYMS``: small ES/EN helper aliases for common-name fallback.
+
+Structured vibe-search still lives in ``natural_language_query.py`` and uses
+``df.loc`` over size/habitat/color/group tags. This file only improves fallback
+search when the user writes a concrete common name such as ``lion`` or
+``cocodrilo``.
 """
 from __future__ import annotations
 
-import re
-import unicodedata
+from src.search_components.normalizer import normalize_text
 
-# Generic terms only: groups, habitats, colors, sizes. No concrete species here.
 GENERIC_CATEGORY_SYNONYMS: dict[str, str] = {
+    # Project scope: Spanish + English only for demo promises.
     "animal": "animalia fauna especie organismo",
     "animales": "animalia fauna especies organismos",
     "planta": "plantae flora vegetal",
     "plantas": "plantae flora vegetales",
-    "ave": "aves bird birds pajaro pájaro plumas",
-    "aves": "aves bird birds pajaros pájaros plumas",
-    "mamifero": "mammalia mammal mammals mamífero mamíferos",
-    "mamífero": "mammalia mammal mammals mamifero mamiferos",
-    "reptil": "reptilia reptile reptiles",
-    "anfibio": "amphibia amphibian amphibians",
-    "insecto": "insecta insect insectos insects",
-    "aracnido": "arachnida arachnid arachnids",
+    "plant": "plantae flora vegetal",
+    "plants": "plantae flora vegetales",
+    "ave": "aves bird pajaro pajaro",
+    "aves": "aves birds pajaros pajaros",
+    "bird": "aves ave pajaro pajaro",
+    "birds": "aves pajaros pajaros",
+    "mamifero": "mammalia mamifero mammal",
+    "mamífero": "mammalia mamifero mammal",
+    "mammal": "mammalia mamifero mamifero",
+    "insecto": "insecta insect",
+    "insect": "insecta insecto",
+    "reptil": "reptilia reptile escamas",
+    "reptiles": "reptilia reptiles escamas",
+    "anfibio": "amphibia amphibian",
+    "amphibian": "amphibia anfibio",
+    "pez": "actinopterygii fish",
+    "peces": "actinopterygii fish",
+    "fish": "actinopterygii pez peces",
+    "flor": "flower flowering plantae",
+    "flower": "flor flowering plantae",
+    "agua": "water aquatic acuatico acuatico",
+    "water": "agua aquatic acuatico acuatico",
+}
+
+# Concrete-name fallback aliases. This is intentionally NOT the generic synonym
+# dictionary, so tests can verify that generic categories remain generic.
+EXACT_NAME_SYNONYMS: dict[str, str] = {
+    "lion": "panthera leo leon",
+    "leon": "panthera leo lion",
+    "león": "panthera leo lion",
+    "cocodrilo": "crocodylia crocodylus crocodile reptilia caiman",
+    "cocodrilos": "crocodylia crocodiles reptilia",
+    "crocodile": "crocodylia crocodylus cocodrilo reptilia caiman",
+    "crocodiles": "crocodylia crocodiles reptilia",
+    "caiman": "crocodylia crocodilian reptilia",
+    "caimán": "crocodylia crocodilian reptilia",
+    "shark": "chondrichthyes selachimorpha tiburon",
+    "tiburon": "chondrichthyes selachimorpha shark",
+    "tiburón": "chondrichthyes selachimorpha shark",
+    "snake": "serpentes reptilia serpiente",
+    "serpiente": "serpentes reptilia snake",
+    "lizard": "reptilia lacertilia lagarto",
+    "lagarto": "reptilia lacertilia lizard",
+    "spider": "arachnida araneae arana",
     "araña": "arachnida araneae spider",
-    "pez": "actinopterygii fish fishes",
-    "flor": "plantae flower flowers",
-    "arbol": "plantae tree trees árbol",
-    "árbol": "plantae tree trees arbol",
-    "agua": "water aquatic acuatico acuático",
-    "bosque": "forest woodland",
-    "selva": "forest jungle rainforest",
-    "desierto": "desert arid",
-    "sabana": "savanna grassland",
-    "montana": "mountain montaña alpine",
-    "montaña": "mountain montana alpine",
-    "humedal": "wetland swamp marsh",
-    "mar": "ocean sea marine",
-    "oceano": "ocean sea marine océano",
-    "océano": "ocean sea marine oceano",
-    "grande": "large big",
-    "pequeno": "small tiny pequeño",
-    "pequeño": "small tiny pequeno",
-    "mediano": "medium",
-    "rosa": "pink",
-    "marron": "brown marrón",
-    "marrón": "brown marron",
-    "negro": "black",
-    "blanco": "white",
-    "verde": "green",
-    "rojo": "red",
-    "amarillo": "yellow",
-    "azul": "blue",
-}
-
-# Specific common-name aliases belong here, not in GENERIC_CATEGORY_SYNONYMS.
-# Spanish + English only for app promises, with a few scientific expansions for
-# name fallback. This does not drive the structured vibe search.
-SPECIFIC_NAME_ALIASES: dict[str, str] = {
-    "lion": "panthera leo",
-    "leon": "panthera leo león",
-    "león": "panthera leo leon",
-    "cocodrilo": "crocodylus crocodile",
-    "crocodile": "crocodylus cocodrilo",
-    "jaguar": "panthera onca",
-    "leopard": "panthera pardus",
-    "leopardo": "panthera pardus",
-    "tiger": "panthera tigris",
+    "arana": "arachnida araneae spider",
+    "eagle": "accipitridae aves rapaz aguila",
+    "aguila": "accipitridae aves rapaz eagle",
+    "águila": "accipitridae aves rapaz eagle",
+    "frog": "amphibia anura rana anfibio",
+    "rana": "amphibia anura frog amphibian",
 }
 
 
-def _normalize_for_matching(text: str) -> str:
-    text = str(text or "").lower()
-    decomposed = unicodedata.normalize("NFKD", text)
-    text_without_accents = "".join(ch for ch in decomposed if not unicodedata.combining(ch))
-    return text_without_accents
+def expand_query(query_text: str) -> str:
+    """Expand a user query for fallback TF-IDF/name search.
 
+    The expansion is intentionally ES/EN only. Cyrillic or other-language common
+    names are still searchable when they already exist in ``vernacular_names``;
+    we simply do not advertise or inject those languages as demo vocabulary.
+    """
+    normalized_query = normalize_text(query_text)
+    words = normalized_query.split()
+    expansions = [normalized_query]
 
-def expand_query(query: str) -> str:
-    """Expand a user query with controlled Spanish/English synonyms."""
-    original = str(query or "").strip()
-    normalized = _normalize_for_matching(original)
-    tokens = set(re.findall(r"[\wáéíóúñü]+", original.lower(), flags=re.UNICODE))
-    normalized_tokens = set(re.findall(r"[\w]+", normalized, flags=re.UNICODE))
+    for word in words:
+        generic_text = GENERIC_CATEGORY_SYNONYMS.get(word)
+        if generic_text:
+            expansions.append(generic_text)
 
-    expansions: list[str] = [original]
-
-    for key, value in GENERIC_CATEGORY_SYNONYMS.items():
-        normalized_key = _normalize_for_matching(key)
-        if key in tokens or normalized_key in normalized_tokens:
-            expansions.append(value)
-
-    for key, value in SPECIFIC_NAME_ALIASES.items():
-        normalized_key = _normalize_for_matching(key)
-        if key in tokens or normalized_key in normalized_tokens:
-            expansions.append(value)
+        exact_text = EXACT_NAME_SYNONYMS.get(word)
+        if exact_text:
+            expansions.append(exact_text)
 
     return " ".join(part for part in expansions if part).strip()

@@ -1,11 +1,11 @@
-"""Estilos visuales de la app."""
+"""Visual styles for the app."""
 from __future__ import annotations
 
 import streamlit as st
 
 
 def apply_styles() -> None:
-    """Aplica CSS ligero y responsive."""
+    """Apply CSS used by cards and responsive species images."""
     st.markdown(
         """
         <style>
@@ -15,43 +15,37 @@ def apply_styles() -> None:
             margin: 0 auto 0.75rem auto;
             border-radius: 18px;
             overflow: hidden;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.10);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            aspect-ratio: 4 / 3;
+            background: rgba(15, 23, 42, 0.06);
+            border: 1px solid rgba(148, 163, 184, 0.35);
         }
 
         .species-image-frame img {
             width: 100%;
             height: clamp(220px, 24vw, 420px);
             aspect-ratio: 4 / 3;
-            object-fit: contain;
+            object-fit: cover;
             display: block;
-            background: rgba(0, 0, 0, 0.08);
         }
 
         .species-image-caption {
+            font-size: 0.82rem;
+            color: #64748b;
+            padding: 0.35rem 0.55rem 0.5rem 0.55rem;
             text-align: center;
-            font-size: 0.78rem;
-            opacity: 0.78;
-            margin-top: 0.2rem;
         }
 
         .species-image-placeholder {
             width: 100%;
             max-width: 360px;
             height: clamp(220px, 24vw, 420px);
-            aspect-ratio: 4 / 3;
             border-radius: 18px;
-            border: 1px dashed rgba(255, 255, 255, 0.25);
+            border: 1px dashed rgba(148, 163, 184, 0.55);
             display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
-            opacity: 0.75;
-            padding: 1rem;
+            color: #64748b;
+            background: rgba(241, 245, 249, 0.55);
             margin: 0 auto 0.75rem auto;
         }
 
