@@ -1,42 +1,35 @@
-"""Basic DataFrame filters for the Streamlit app."""
+"""Helpers para filtrar dataframes de la app."""
 from __future__ import annotations
 
 import pandas as pd
 
-PROJECT_KINGDOMS = {"Animalia", "Plantae"}
+PROJECT_SCOPE_KINGDOMS = {"Animalia", "Plantae"}
 
 
 def filter_project_scope(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only animals and plants, as required by the project brief."""
+    """Devuelve solo Animalia + Plantae cuando la columna kingdom existe."""
     if df.empty or "kingdom" not in df.columns:
         return df.copy()
-    normalized_kingdom = df["kingdom"].fillna("").astype(str).str.strip()
-    return df.loc[normalized_kingdom.isin(PROJECT_KINGDOMS)].copy()
+    scoped = df[df["kingdom"].fillna("").astype(str).isin(PROJECT_SCOPE_KINGDOMS)].copy()
+    return scoped if not scoped.empty else df.copy()
 
 
 def get_available_taxon_classes(df: pd.DataFrame) -> list[str]:
-    """Return classes actually available in the current artifact."""
-    scoped_df = filter_project_scope(df)
-    if scoped_df.empty or "taxon_class" not in scoped_df.columns:
+    """Obtiene clases taxonómicas disponibles directamente desde el dataset."""
+    if df.empty or "taxon_class" not in df.columns:
         return []
-    classes = scoped_df["taxon_class"].dropna().astype(str).str.strip()
-    classes = classes[classes.ne("")]
-    return sorted(classes.unique().tolist())
+    scoped = filter_project_scope(df)
+    classes = (
+        scoped["taxon_class"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+    )
+    return sorted(value for value in classes.unique().tolist() if value)
 
 
-def apply_basic_filters(
-    df: pd.DataFrame,
-    selected_classes: list[str],
-    min_observations: int,
-) -> pd.DataFrame:
-    """Apply simple dataframe filters using df.loc."""
-    filtered_df = filter_project_scope(df)
-
-    if "observations" in filtered_df.columns:
-        observations = pd.to_numeric(filtered_df["observations"], errors="coerce").fillna(0)
-        filtered_df = filtered_df.loc[observations >= min_observations].copy()
-
-    if selected_classes and "taxon_class" in filtered_df.columns:
-        filtered_df = filtered_df.loc[filtered_df["taxon_class"].isin(selected_classes)].copy()
-
-    return filtered_df
+def apply_taxon_class_filter(df: pd.DataFrame, selected_class: str | None) -> pd.DataFrame:
+    """Filtra por clase taxonómica si se ha seleccionado una clase concreta."""
+    if not selected_class or selected_class == "Todas" or "taxon_class" not in df.columns:
+        return df.copy()
+    return df[df["taxon_class"].fillna("").astype(str).eq(selected_class)].copy()
