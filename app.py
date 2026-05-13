@@ -29,7 +29,8 @@ from src.ui import (
 
 
 def main() -> None:
-    """Ejecuta la aplicación."""
+    """Run the Streamlit application."""
+
     st.set_page_config(
         page_title="Biodiversity Finder",
         page_icon="🌿",
@@ -43,12 +44,9 @@ def main() -> None:
     occurrence_points_df = load_occurrence_points()
     metrics = load_metrics()
 
-    (
-        query_text,
-        selected_classes,
-        min_observations,
-        max_results,
-    ) = render_sidebar_controls(encyclopedia_df)
+    query_text, selected_classes, min_observations, max_results = render_sidebar_controls(
+        encyclopedia_df
+    )
 
     filtered_df = apply_basic_filters(
         df=encyclopedia_df,
@@ -56,23 +54,34 @@ def main() -> None:
         min_observations=min_observations,
     )
 
-    vibe_filtered_df, parsed_query, used_fallback = apply_natural_language_filters(
+    vibe_filtered_df, parsed_query, nl_fallback = apply_natural_language_filters(
         filtered_df,
         query_text,
     )
 
     if parsed_query.has_structured_filters:
-        st.info(
-            "Natural Language to Query detectó filtros: "
-            f"size={parsed_query.size_tags or '-'}, "
-            f"habitat={parsed_query.habitat_tags or '-'}, "
-            f"color={parsed_query.color_tags or '-'}, "
-            f"group={parsed_query.group_tags or '-'}"
-        )
-        if used_fallback:
+        if nl_fallback:
             st.warning(
-                "Los filtros estructurados no encontraron resultados exactos. "
-                "Se muestra búsqueda secundaria por nombre/texto."
+                f"Los filtros detectados (size={parsed_query.size_tags or '-'}, "
+                f"habitat={parsed_query.habitat_tags or '-'}, "
+                f"color={parsed_query.color_tags or '-'}, "
+                f"group={parsed_query.group_tags or '-'}) no encontraron resultados. "
+                "Mostrando búsqueda general por nombre/texto."
+            )
+        else:
+            detected = []
+            if parsed_query.size_tags:
+                detected.append(f"tamaño: {', '.join(parsed_query.size_tags)}")
+            if parsed_query.habitat_tags:
+                detected.append(f"hábitat: {', '.join(parsed_query.habitat_tags)}")
+            if parsed_query.color_tags:
+                detected.append(f"color: {', '.join(parsed_query.color_tags)}")
+            if parsed_query.group_tags:
+                detected.append(f"grupo: {', '.join(parsed_query.group_tags)}")
+            st.info(
+                "Filtros detectados en tu búsqueda: "
+                + " · ".join(detected)
+                + ". Aplicando filtros estructurados sobre la enciclopedia."
             )
 
     result_df = semantic_search_encyclopedia(
@@ -83,17 +92,14 @@ def main() -> None:
 
     render_metrics(result_df, encyclopedia_df, metrics)
 
-    tabs = st.tabs([
-        "Resultados",
-        "Gráficos",
-        "✨ Plotly EDA",
-        "Datos",
-    ])
+    tabs = st.tabs(["Resultados", "Gráficos", "✨ Plotly EDA", "Datos"])
 
     with tabs[0]:
         st.caption(
-            "Cada resultado tiene su propio mapa en la sección "
-            "`Ver mapa de avistamientos para esta especie`."
+            "Cada tarjeta incluye un mapa desplegable con los puntos de avistamiento "
+            "registrados en GBIF para esa especie. El estado de conservación procede "
+            "de IUCN Red List cuando el token está configurado; si no hay coincidencia, "
+            "se muestra 'Sin datos IUCN'."
         )
         render_species_cards(
             result_df,
@@ -103,32 +109,19 @@ def main() -> None:
 
     with tabs[1]:
         if result_df.empty:
-            st.warning("No se encontraron resultados. Prueba con otra búsqueda o cambia los filtros.")
+            st.warning("No se encontraron resultados para visualizar.")
         else:
-            if query_text.strip() and "search_score" in result_df.columns:
-                st.altair_chart(build_search_score_chart(result_df), width="stretch")
-            chart_column_1, chart_column_2 = st.columns(2)
-            with chart_column_1:
-                st.altair_chart(build_class_distribution_chart(result_df), width="stretch")
-            with chart_column_2:
-                st.altair_chart(build_map_points_chart(result_df), width="stretch")
+            st.altair_chart(build_class_distribution_chart(result_df), use_container_width=True)
+            st.altair_chart(build_search_score_chart(result_df), use_container_width=True)
+            st.altair_chart(build_map_points_chart(result_df), use_container_width=True)
 
     with tabs[2]:
         if result_df.empty:
-            st.warning("No hay datos para graficar.")
+            st.warning("No se encontraron resultados para visualizar.")
         else:
-            plotly_chart_1 = build_plotly_class_distribution(result_df)
-            plotly_chart_2 = build_plotly_conservation_chart(result_df)
-            plotly_chart_3 = build_plotly_habitat_chart(result_df)
-            if plotly_chart_1 is not None:
-                st.plotly_chart(plotly_chart_1, width="stretch")
-            chart_column_1, chart_column_2 = st.columns(2)
-            with chart_column_1:
-                if plotly_chart_2 is not None:
-                    st.plotly_chart(plotly_chart_2, width="stretch")
-            with chart_column_2:
-                if plotly_chart_3 is not None:
-                    st.plotly_chart(plotly_chart_3, width="stretch")
+            st.plotly_chart(build_plotly_class_distribution(result_df), use_container_width=True)
+            st.plotly_chart(build_plotly_conservation_chart(result_df), use_container_width=True)
+            st.plotly_chart(build_plotly_habitat_chart(result_df), use_container_width=True)
 
     with tabs[3]:
         render_data_table(result_df)
