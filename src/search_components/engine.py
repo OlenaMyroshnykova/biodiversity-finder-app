@@ -14,6 +14,7 @@ from src.search_components.scoring import compute_tfidf_scores
 
 
 SEARCH_DOCUMENT_COLUMNS = [
+    # Identidad taxonómica — lo más importante para búsqueda
     "scientific_name",
     "vernacular_names",
     "vernacular_languages",
@@ -24,15 +25,17 @@ SEARCH_DOCUMENT_COLUMNS = [
     "family",
     "genus",
     "species",
+    # Contexto geográfico y de observación
     "countries",
-    "source_queries",
     "profile_text",
     "conservation_status",
     "conservation_category",
-    "color_tag",
-    "habitat_tag",
-    "size_tag",
+    # Términos de búsqueda humana (nombres comunes adicionales)
     "tags_de_busqueda",
+    # EXCLUIDOS del TF-IDF: color_tag, habitat_tag, size_tag, source_queries
+    # Estos tags son usados por el filtro NL (df.loc), no por TF-IDF.
+    # Incluirlos hace que "grande" en size_tag="small medium large grande"
+    # eleve hongos y insectos en búsquedas de mamíferos grandes.
 ]
 
 
