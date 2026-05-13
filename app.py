@@ -1,5 +1,4 @@
 """Aplicación Streamlit de Biodiversity Finder."""
-
 from __future__ import annotations
 
 import streamlit as st
@@ -29,14 +28,8 @@ from src.ui import (
 
 
 def main() -> None:
-    """Run the Streamlit application."""
-
-    st.set_page_config(
-        page_title="Biodiversity Finder",
-        page_icon="🌿",
-        layout="wide",
-    )
-
+    """Ejecuta la aplicación."""
+    st.set_page_config(page_title="Biodiversity Finder", page_icon="🌿", layout="wide")
     apply_styles()
     render_header()
 
@@ -47,13 +40,11 @@ def main() -> None:
     query_text, selected_classes, min_observations, max_results = render_sidebar_controls(
         encyclopedia_df
     )
-
     filtered_df = apply_basic_filters(
         df=encyclopedia_df,
         selected_classes=selected_classes,
         min_observations=min_observations,
     )
-
     vibe_filtered_df, parsed_query, nl_fallback = apply_natural_language_filters(
         filtered_df,
         query_text,
@@ -62,10 +53,7 @@ def main() -> None:
     if parsed_query.has_structured_filters:
         if nl_fallback:
             st.warning(
-                f"Los filtros detectados (size={parsed_query.size_tags or '-'}, "
-                f"habitat={parsed_query.habitat_tags or '-'}, "
-                f"color={parsed_query.color_tags or '-'}, "
-                f"group={parsed_query.group_tags or '-'}) no encontraron resultados. "
+                "⚠️ Los filtros estructurados detectados no encontraron resultados. "
                 "Mostrando búsqueda general por nombre/texto."
             )
         else:
@@ -81,7 +69,7 @@ def main() -> None:
             st.info(
                 "Filtros detectados en tu búsqueda: "
                 + " · ".join(detected)
-                + ". Aplicando filtros estructurados sobre la enciclopedia."
+                + ". Aplicando filtros sobre la enciclopedia."
             )
 
     result_df = semantic_search_encyclopedia(
@@ -91,15 +79,13 @@ def main() -> None:
     )
 
     render_metrics(result_df, encyclopedia_df, metrics)
-
     tabs = st.tabs(["Resultados", "Gráficos", "✨ Plotly EDA", "Datos"])
 
     with tabs[0]:
         st.caption(
             "Cada tarjeta incluye un mapa desplegable con los puntos de avistamiento "
-            "registrados en GBIF para esa especie. El estado de conservación procede "
-            "de IUCN Red List cuando el token está configurado; si no hay coincidencia, "
-            "se muestra 'Sin datos IUCN'."
+            "registrados en GBIF. El estado de conservación muestra Fuente: IUCN Red List "
+            "solo cuando el pipeline encontró datos oficiales."
         )
         render_species_cards(
             result_df,
@@ -109,19 +95,32 @@ def main() -> None:
 
     with tabs[1]:
         if result_df.empty:
-            st.warning("No se encontraron resultados para visualizar.")
+            st.warning("No se encontraron resultados. Prueba otra búsqueda o cambia filtros.")
         else:
-            st.altair_chart(build_class_distribution_chart(result_df), use_container_width=True)
-            st.altair_chart(build_search_score_chart(result_df), use_container_width=True)
-            st.altair_chart(build_map_points_chart(result_df), use_container_width=True)
+            if query_text.strip() and "search_score" in result_df.columns:
+                st.altair_chart(build_search_score_chart(result_df), width="stretch")
+            chart_column_1, chart_column_2 = st.columns(2)
+            with chart_column_1:
+                st.altair_chart(build_class_distribution_chart(result_df), width="stretch")
+            with chart_column_2:
+                st.altair_chart(build_map_points_chart(result_df), width="stretch")
 
     with tabs[2]:
         if result_df.empty:
-            st.warning("No se encontraron resultados para visualizar.")
+            st.warning("No hay datos para graficar.")
         else:
-            st.plotly_chart(build_plotly_class_distribution(result_df), use_container_width=True)
-            st.plotly_chart(build_plotly_conservation_chart(result_df), use_container_width=True)
-            st.plotly_chart(build_plotly_habitat_chart(result_df), use_container_width=True)
+            plotly_chart_1 = build_plotly_class_distribution(result_df)
+            plotly_chart_2 = build_plotly_conservation_chart(result_df)
+            plotly_chart_3 = build_plotly_habitat_chart(result_df)
+            if plotly_chart_1 is not None:
+                st.plotly_chart(plotly_chart_1, width="stretch")
+            chart_column_1, chart_column_2 = st.columns(2)
+            with chart_column_1:
+                if plotly_chart_2 is not None:
+                    st.plotly_chart(plotly_chart_2, width="stretch")
+            with chart_column_2:
+                if plotly_chart_3 is not None:
+                    st.plotly_chart(plotly_chart_3, width="stretch")
 
     with tabs[3]:
         render_data_table(result_df)

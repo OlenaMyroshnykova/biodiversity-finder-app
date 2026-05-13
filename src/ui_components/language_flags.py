@@ -1,9 +1,8 @@
-"""Language block without flags.
+"""Bloque de idiomas sin banderas.
 
-A flag does not represent a language, and the current prototype only promises
-stable search in Spanish and English.
+Una bandera no representa un idioma y el prototipo no debe prometer más
+idiomas de los que soporta de forma estable.
 """
-
 from __future__ import annotations
 
 import streamlit as st
@@ -12,19 +11,13 @@ from src.ui_components.config import get_supported_languages_text
 
 
 def render_language_flags(compact: bool = True) -> None:
-    """Backward-compatible function: no flags are rendered anymore."""
-
-    render_language_block()
+    """Compatibilidad: ya no renderiza banderas."""
+    st.caption(f"Búsqueda disponible en: {get_supported_languages_text()}.")
 
 
 def render_language_block() -> None:
-    """Render an honest language-support block in the sidebar."""
-
+    """Renderiza bloque honesto de idiomas para sidebar."""
     st.sidebar.markdown("### Idiomas de búsqueda")
-    st.sidebar.caption(get_supported_languages_text())
-    st.sidebar.caption(
-        "El vibe-search principal usa vocabulario controlado en español e inglés. "
-        "Otros nombres comunes pueden aparecer en fichas, pero no se usan para "
-        "decidir filtros estructurados."
-    )
+    st.sidebar.caption(f"Búsqueda estable en {get_supported_languages_text()}.")
+    st.sidebar.caption("Los nombres comunes de otros idiomas pueden aparecer en fichas, pero no controlan el vibe-search.")
     st.sidebar.divider()
