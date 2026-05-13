@@ -30,6 +30,7 @@ from src.ui import (
 def main() -> None:
     """Ejecuta la aplicación."""
     st.set_page_config(page_title="Biodiversity Finder", page_icon="🌿", layout="wide")
+
     apply_styles()
     render_header()
 
@@ -40,11 +41,13 @@ def main() -> None:
     query_text, selected_classes, min_observations, max_results = render_sidebar_controls(
         encyclopedia_df
     )
+
     filtered_df = apply_basic_filters(
         df=encyclopedia_df,
         selected_classes=selected_classes,
         min_observations=min_observations,
     )
+
     vibe_filtered_df, parsed_query, nl_fallback = apply_natural_language_filters(
         filtered_df,
         query_text,
@@ -53,8 +56,8 @@ def main() -> None:
     if parsed_query.has_structured_filters:
         if nl_fallback:
             st.warning(
-                "⚠️ Los filtros estructurados detectados no encontraron resultados. "
-                "Mostrando búsqueda general por nombre/texto."
+                "Los filtros estructurados detectados no encontraron resultados. "
+                "Mostrando búsqueda secundaria por nombre/texto."
             )
         else:
             detected = []
@@ -67,9 +70,9 @@ def main() -> None:
             if parsed_query.group_tags:
                 detected.append(f"grupo: {', '.join(parsed_query.group_tags)}")
             st.info(
-                "Filtros detectados en tu búsqueda: "
+                "Filtros detectados: "
                 + " · ".join(detected)
-                + ". Aplicando filtros sobre la enciclopedia."
+                + ". Aplicando df.loc sobre etiquetas estructuradas."
             )
 
     result_df = semantic_search_encyclopedia(
@@ -79,13 +82,14 @@ def main() -> None:
     )
 
     render_metrics(result_df, encyclopedia_df, metrics)
+
     tabs = st.tabs(["Resultados", "Gráficos", "✨ Plotly EDA", "Datos"])
 
     with tabs[0]:
         st.caption(
-            "Cada tarjeta incluye un mapa desplegable con los puntos de avistamiento "
-            "registrados en GBIF. El estado de conservación muestra Fuente: IUCN Red List "
-            "solo cuando el pipeline encontró datos oficiales."
+            "La app usa el artifact ligero por defecto para cargar más rápido. "
+            "Cada tarjeta puede abrir un mapa Folium con puntos GBIF. "
+            "El estado de conservación muestra Fuente: IUCN Red List solo cuando el pipeline encontró datos oficiales."
         )
         render_species_cards(
             result_df,
