@@ -1,8 +1,8 @@
-"""Helpers for filtering the biodiversity dataframe in the Streamlit app.
+"""DataFrame filtering helpers for the Streamlit app.
 
-This module intentionally keeps the project scope simple for the final demo:
-Animalia + Plantae only. The sidebar class list is derived from the current
-artifact, not from a hardcoded list of old classes.
+This module is intentionally small and dependency-free because it is imported by
+both the UI and the test suite. The app scope is Animalia + Plantae; Fungi and
+other kingdoms are filtered out before sidebar class filters are applied.
 """
 from __future__ import annotations
 
@@ -11,16 +11,37 @@ from typing import Any
 
 import pandas as pd
 
-PROJECT_SCOPE_KINGDOMS = {"Animalia", "Plantae"}
-ALL_CLASS_OPTIONS = {"All", "Todos", "Todas", "All classes", "Todas las clases", ""}
+PROJECT_SCOPE_KINGDOMS: set[str] = {"Animalia", "Plantae"}
+ALL_CLASS_OPTIONS: set[str] = {
+    "Todas",
+    "Todos",
+    "All",
+    "All classes",
+    "Todas las clases",
+    "Todos los grupos",
+    "",
+}
+
+
+def _normalize_text(value: Any) -> str:
+    """Return a stripped string without converting NaN-like values to useful text."""
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
 
 
 def _as_clean_list(value: object) -> list[str]:
     """Normalize a sidebar value to a clean list of strings.
 
-    Streamlit widgets may return a string, list, tuple, set, None, or values such
-    as "All". The previous version checked membership before handling lists,
-    which crashed with: TypeError: unhashable type: 'list'.
+    Streamlit widgets may return a single string, a tuple, a list, None, or an
+    empty selection. Older versions of this helper checked membership before
+    checking whether the value was a list, which raised ``TypeError`` for list
+    values. Keep list handling first.
     """
     if value is None:
         return []
@@ -34,93 +55,168 @@ def _as_clean_list(value: object) -> list[str]:
     if isinstance(value, Iterable):
         result: list[str] = []
         for item in value:
-            if item is None:
-                continue
-            cleaned = str(item).strip()
+            cleaned = _normalize_text(item)
             if cleaned and cleaned not in ALL_CLASS_OPTIONS:
                 result.append(cleaned)
         return result
 
-    cleaned = str(value).strip()
+    cleaned = _normalize_text(value)
     if cleaned in ALL_CLASS_OPTIONS:
         return []
     return [cleaned] if cleaned else []
 
 
-def normalize_project_scope(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only Animalia and Plantae rows for the educational project scope."""
+def filter_project_scope(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep only the project scope: animals and plants.
+
+    If the dataset does not contain a ``kingdom`` column, the function returns a
+    copy unchanged. This keeps the helper safe for small unit-test fixtures.
+    """
     if df is None or df.empty:
         return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
 
-    filtered_df = df.copy()
-    if "kingdom" not in filtered_df.columns:
-        return filtered_df
+    result = df.copy()
+    if "kingdom" not in result.columns:
+        return result
 
-    kingdom_values = filtered_df["kingdom"].fillna("").astype(str).str.strip()
-    return filtered_df.loc[kingdom_values.isin(PROJECT_SCOPE_KINGDOMS)].copy()
+    kingdoms = result["kingdom"].fillna("").astype(str).str.strip()
+    return result.loc[kingdoms.isin(PROJECT_SCOPE_KINGDOMS)].copy()
 
 
 def get_available_taxon_classes(df: pd.DataFrame) -> list[str]:
-    """Return sorted taxon classes available in the current artifact.
-
-    The app must not show stale/hardcoded classes. Fungi are excluded because the
-    project scope is animals and plants.
-    """
+    """Return taxonomic classes available in the current dataset scope."""
     if df is None or df.empty or "taxon_class" not in df.columns:
         return []
 
-    scoped_df = normalize_project_scope(df)
-    if scoped_df.empty:
+    scoped = filter_project_scope(df)
+    if scoped.empty or "taxon_class" not in scoped.columns:
         return []
 
     classes = (
-        scoped_df["taxon_class"]
+        scoped["taxon_class"]
         .dropna()
         .astype(str)
         .str.strip()
     )
-    classes = classes[classes.ne("")]
-    return sorted(classes.drop_duplicates().tolist())
+    classes = classes[classes != ""]
+    return sorted(classes.unique().tolist())
 
 
-def apply_basic_filters(
+def apply_taxon_class_filter(
     df: pd.DataFrame,
     selected_classes: object | None = None,
-    min_observations: int | float | None = 0,
-    **kwargs: Any,
 ) -> pd.DataFrame:
-    """Apply basic dataframe filters used by the sidebar.
-
-    The order is important:
-    1. enforce project scope Animalia + Plantae;
-    2. apply minimum observations;
-    3. apply selected taxon classes from the *scoped* dataset.
-
-    Extra keyword aliases are accepted for compatibility with older app/tests.
-    """
+    """Filter a dataframe by selected taxonomic classes."""
     if df is None or df.empty:
         return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
 
-    if selected_classes is None:
-        selected_classes = kwargs.get("taxon_classes", kwargs.get("selected_taxon_classes"))
+    result = df.copy()
+    selected = _as_clean_list(selected_classes)
+    if not selected or "taxon_class" not in result.columns:
+        return result
 
-    if min_observations is None:
-        min_observations = kwargs.get("minimum_observations", kwargs.get("min_obs", 0))
+    taxon_class = result["taxon_class"].fillna("").astype(str).str.strip()
+    return result.loc[taxon_class.isin(selected)].copy()
 
-    filtered_df = normalize_project_scope(df)
+
+def apply_min_observations_filter(
+    df: pd.DataFrame,
+    min_observations: int | float | str | None = 0,
+) -> pd.DataFrame:
+    """Filter by the observations column when it exists."""
+    if df is None or df.empty:
+        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
+
+    result = df.copy()
+    if "observations" not in result.columns:
+        return result
 
     try:
         minimum = float(min_observations or 0)
     except (TypeError, ValueError):
         minimum = 0.0
 
-    if "observations" in filtered_df.columns and minimum > 0:
-        observations = pd.to_numeric(filtered_df["observations"], errors="coerce").fillna(0)
-        filtered_df = filtered_df.loc[observations >= minimum].copy()
+    observations = pd.to_numeric(result["observations"], errors="coerce").fillna(0)
+    return result.loc[observations >= minimum].copy()
 
-    selected_classes_list = _as_clean_list(selected_classes)
-    if selected_classes_list and "taxon_class" in filtered_df.columns:
-        class_values = filtered_df["taxon_class"].fillna("").astype(str).str.strip()
-        filtered_df = filtered_df.loc[class_values.isin(selected_classes_list)].copy()
 
-    return filtered_df
+def apply_conservation_filter(
+    df: pd.DataFrame,
+    conservation_filter: str | None = None,
+) -> pd.DataFrame:
+    """Apply an optional conservation filter used by the sidebar."""
+    if df is None or df.empty:
+        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
+
+    result = df.copy()
+    option = _normalize_text(conservation_filter).lower()
+    if not option or option in {"all", "todos", "todas", "all species"}:
+        return result
+
+    category_col = None
+    for candidate in ("iucn_category", "conservation_status"):
+        if candidate in result.columns:
+            category_col = candidate
+            break
+
+    if option in {"threatened", "amenazadas", "amenazada", "en peligro"}:
+        if "is_threatened" in result.columns:
+            threatened = result["is_threatened"].fillna(False).astype(bool)
+            return result.loc[threatened].copy()
+        if category_col:
+            categories = result[category_col].fillna("").astype(str).str.upper()
+            return result.loc[categories.isin({"VU", "EN", "CR", "EW", "EX"})].copy()
+        return result.iloc[0:0].copy()
+
+    if option in {"official", "iucn", "iucn red list", "con datos iucn"}:
+        if "conservation_source" in result.columns:
+            source = result["conservation_source"].fillna("").astype(str).str.lower()
+            return result.loc[source.eq("iucn red list")].copy()
+        if "iucn_is_official" in result.columns:
+            official = result["iucn_is_official"].fillna(False).astype(bool)
+            return result.loc[official].copy()
+        return result
+
+    if option in {"no_data", "sin datos", "sin datos iucn", "no iucn data"}:
+        if category_col:
+            categories = result[category_col].fillna("").astype(str).str.upper()
+            return result.loc[categories.isin({"", "NO_DATA", "NE", "NAN"})].copy()
+        return result
+
+    return result
+
+
+def apply_basic_filters(
+    df: pd.DataFrame,
+    selected_classes: object | None = None,
+    min_observations: int | float | str | None = 0,
+    conservation_filter: str | None = None,
+) -> pd.DataFrame:
+    """Apply the app's basic sidebar filters in a stable order.
+
+    Order matters:
+    1. project scope, so Fungi cannot reappear even if selected by an old UI;
+    2. minimum observations;
+    3. selected taxonomic classes;
+    4. optional conservation status.
+    """
+    if df is None:
+        return pd.DataFrame()
+
+    result = filter_project_scope(df)
+    result = apply_min_observations_filter(result, min_observations)
+    result = apply_taxon_class_filter(result, selected_classes)
+    result = apply_conservation_filter(result, conservation_filter)
+    return result.copy()
+
+
+__all__ = [
+    "PROJECT_SCOPE_KINGDOMS",
+    "ALL_CLASS_OPTIONS",
+    "filter_project_scope",
+    "get_available_taxon_classes",
+    "apply_taxon_class_filter",
+    "apply_min_observations_filter",
+    "apply_conservation_filter",
+    "apply_basic_filters",
+]
