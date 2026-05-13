@@ -23,7 +23,7 @@ def apply_styles() -> None:
             width: 100%;
             height: clamp(220px, 24vw, 420px);
             aspect-ratio: 4 / 3;
-            object-fit: cover;
+            object-fit: contain;
             display: block;
         }
 
