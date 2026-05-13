@@ -86,7 +86,6 @@ GENERIC_CATEGORY_SYNONYMS = {
     "hongos":     "fungi basidiomycota mushrooms setas",
     "seta":       "fungi basidiomycota mushroom hongo",
     "setas":      "fungi basidiomycota mushrooms hongos",
-    "oso":        "ursidae bear mammalia",
     "ballena":    "cetacea whale mammalia oceano",
     "delfin":     "cetacea dolphin mammalia",
     "delfín":     "cetacea dolphin mammalia",
