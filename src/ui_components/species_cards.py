@@ -47,10 +47,10 @@ def render_species_cards(
             image_column, content_column = st.columns([1, 2.4], vertical_alignment="top")
 
             with image_column:
-                image_url = find_species_image_url(
-                    str(row.get("scientific_name", "")),
-                    excluded_urls=used_image_urls,
+                _candidate_url = find_species_image_url(
+                    str(row.get("scientific_name", ""))
                 )
+                image_url = _candidate_url if _candidate_url not in used_image_urls else None
 
                 if image_url:
                     used_image_urls.add(image_url)
