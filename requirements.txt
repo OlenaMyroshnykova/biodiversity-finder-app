@@ -8,3 +8,4 @@ pytest
 plotly
 folium
 streamlit-folium
+python-dotenv
