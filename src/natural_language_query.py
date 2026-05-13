@@ -1,4 +1,10 @@
-"""Traductor simple de lenguaje natural a máscaras booleanas de Pandas."""
+"""Traductor simple de lenguaje natural a máscaras booleanas de Pandas.
+
+Arquitectura limpia para el entregable:
+- El vibe-search principal usa español e inglés.
+- Los nombres comunes multilingües no participan en los filtros estructurados.
+- La app convierte frases naturales en columnas normalizadas: size/habitat/color/group.
+"""
 
 from __future__ import annotations
 
@@ -8,20 +14,8 @@ import pandas as pd
 
 from src.search_components.normalizer import normalize_text
 
-
 SIZE_KEYWORDS = {
-    "small": [
-        "small",
-        "little",
-        "tiny",
-        "pequeno",
-        "pequeño",
-        "chico",
-        "mini",
-        "bicho",
-        "insecto",
-        "bug",
-    ],
+    "small": ["small", "little", "tiny", "pequeno", "pequeño", "chico", "mini"],
     "medium": ["medium", "mediano", "mediana"],
     "large": ["large", "big", "grande", "enorme", "gigante"],
 }
@@ -40,10 +34,11 @@ HABITAT_KEYWORDS = {
         "lago",
     ],
     "forest": ["forest", "bosque", "jungle", "selva"],
-    "savanna": ["savanna", "sabana"],
+    "savanna": ["savanna", "sabana", "savana"],
     "mountain": ["mountain", "montana", "montaña"],
     "polar": ["polar", "ice", "hielo", "arctic", "artico", "ártico"],
     "meadow": ["meadow", "pradera", "garden", "jardin", "jardín"],
+    "ocean": ["ocean", "sea", "marine", "oceano", "océano", "mar", "marino"],
 }
 
 COLOR_KEYWORDS = {
@@ -51,56 +46,55 @@ COLOR_KEYWORDS = {
     "white": ["white", "blanco", "blanca"],
     "brown": ["brown", "marron", "marrón", "dorado", "golden"],
     "green": ["green", "verde"],
+    "gray": ["gray", "grey", "gris"],
+    "black": ["black", "negro", "negra"],
     "colorful": ["colorful", "multicolor", "bright", "colorido", "colores"],
 }
 
 GROUP_KEYWORDS = {
-    "insect": [
-        "insect", "insecto", "bicho", "bug", "mariposa", "butterfly", "polilla", "moth",
-        "насекомое", "насекомые", "комаха",
-    ],
-    "bird": [
-        "bird", "ave", "pajaro", "pájaro", "aves",
-        "птица", "птах", "птицы",
-    ],
-    "mammal": [
-        "mammal", "mamifero", "mamífero", "mamíferos", "mamiferos",
-        "млекопитающее", "млекопитающие",
-    ],
-    "amphibian": [
-        "amphibian", "anfibio", "frog", "rana", "sapo", "toad", "anfibios",
-        "лягушка", "жаба", "амфибия",
-    ],
-    "plant": [
-        "plant", "planta", "flower", "flor", "árbol", "arbol", "tree",
-        "vegetal", "herb", "hierba", "растение", "рослина", "цветок",
-    ],
+    "animal": ["animal", "animals", "animales", "bicho", "criatura", "fauna"],
+    "insect": ["insect", "insecto", "bicho", "bug", "mariposa", "butterfly", "polilla", "moth"],
+    "bird": ["bird", "ave", "pajaro", "pájaro", "aves"],
+    "mammal": ["mammal", "mamifero", "mamífero", "mamíferos", "mamiferos"],
+    "amphibian": ["amphibian", "anfibio", "anfibios", "frog", "rana", "sapo", "toad"],
+    "plant": ["plant", "plants", "planta", "plantas", "flower", "flor", "arbol", "árbol", "tree", "vegetal"],
     "reptile": [
-        "reptile", "reptil", "reptilia", "reptiles",
-        "cocodrilo", "cocodrilos", "crocodile", "crocodiles", "crocodilian",
-        "caiman", "caimán", "alligator",
-        "lagarto", "lagartos", "lizard", "lizards",
-        "serpiente", "serpientes", "snake", "snakes", "víbora", "vibora",
-        "iguana", "iguanas",
-        "крокодил", "крокодилы", "рептилия", "рептилии", "змея", "змеи", "ящерица",
+        "reptile",
+        "reptil",
+        "reptilia",
+        "reptiles",
+        "cocodrilo",
+        "cocodrilos",
+        "crocodile",
+        "crocodiles",
+        "caiman",
+        "caimán",
+        "alligator",
+        "lagarto",
+        "lagartos",
+        "lizard",
+        "serpiente",
+        "serpientes",
+        "snake",
+        "snakes",
+        "iguana",
     ],
-    "fish": [
-        "fish", "pez", "peces", "pescado",
-        "tiburon", "tiburón", "tiburones", "shark", "sharks",
-        "raya", "rayas", "ray", "rays",
-        "рыба", "рыбы", "акула", "акулы", "скат",
-    ],
-    "spider": [
-        "spider", "spiders", "araña", "arañas", "arana",
-        "scorpion", "scorpions", "escorpion", "escorpión",
-        "arachnid", "aracnido", "arácnido",
-        "паук", "пауки", "скорпион",
-    ],
-    "fungi": [
-        "fungi", "fungus", "hongo", "hongos", "seta", "setas",
-        "mushroom", "mushrooms",
-        "гриб", "грибы",
-    ],
+    "fish": ["fish", "pez", "peces", "pescado", "tiburon", "tiburón", "shark", "sharks", "raya", "ray"],
+    "spider": ["spider", "spiders", "araña", "arañas", "arana", "scorpion", "escorpion", "escorpión", "arachnid", "aracnido", "arácnido"],
+    "fungi": ["fungi", "fungus", "hongo", "hongos", "seta", "setas", "mushroom", "mushrooms"],
+}
+
+GROUP_TO_TAXON_TEXT = {
+    "animal": ["animalia"],
+    "insect": ["insecta", "lepidoptera"],
+    "bird": ["aves"],
+    "mammal": ["mammalia"],
+    "amphibian": ["amphibia"],
+    "plant": ["plantae", "magnoliopsida"],
+    "reptile": ["reptilia", "crocodylia", "squamata"],
+    "fish": ["actinopterygii", "chondrichthyes", "pisces", "teleostei"],
+    "spider": ["arachnida", "araneae", "scorpiones"],
+    "fungi": ["fungi", "basidiomycota", "ascomycota"],
 }
 
 
@@ -117,18 +111,12 @@ class ParsedNaturalQuery:
     @property
     def has_structured_filters(self) -> bool:
         """Indica si se detectó al menos un filtro estructurado."""
-        return bool(
-            self.size_tags
-            or self.habitat_tags
-            or self.color_tags
-            or self.group_tags
-        )
+        return bool(self.size_tags or self.habitat_tags or self.color_tags or self.group_tags)
 
 
 def parse_natural_language_query(query_text: str) -> ParsedNaturalQuery:
     """Extrae filtros estructurados de la frase del usuario."""
     normalized_query = normalize_text(query_text)
-
     return ParsedNaturalQuery(
         size_tags=detect_tags(normalized_query, SIZE_KEYWORDS),
         habitat_tags=detect_tags(normalized_query, HABITAT_KEYWORDS),
@@ -138,22 +126,16 @@ def parse_natural_language_query(query_text: str) -> ParsedNaturalQuery:
     )
 
 
-def detect_tags(
-    normalized_query: str,
-    vocabulary: dict[str, list[str]],
-) -> list[str]:
-    """Detecta tags por vocabulario."""
-    detected = []
-
+def detect_tags(normalized_query: str, vocabulary: dict[str, list[str]]) -> list[str]:
+    """Detecta tags por vocabulario controlado."""
+    detected: list[str] = []
     query_tokens = set(normalized_query.split())
 
     for tag, keywords in vocabulary.items():
         normalized_keywords = [normalize_text(keyword) for keyword in keywords]
-
         if any(keyword in query_tokens for keyword in normalized_keywords):
             detected.append(tag)
             continue
-
         if any(keyword and keyword in normalized_query for keyword in normalized_keywords):
             detected.append(tag)
 
@@ -167,11 +149,10 @@ def apply_natural_language_filters(
     """Aplica filtros con df.loc según la frase natural.
 
     Devuelve (resultado_df, parsed_query, hubo_fallback).
-    hubo_fallback=True cuando los filtros no encontraron resultados
-    y se devuelve el df original sin filtrar.
+    hubo_fallback=True cuando los filtros no encontraron resultados y se devuelve
+    el dataframe original para permitir búsqueda secundaria por nombre.
     """
     parsed_query = parse_natural_language_query(query_text)
-
     if df.empty or not parsed_query.has_structured_filters:
         return df.copy(), parsed_query, False
 
@@ -187,26 +168,33 @@ def apply_natural_language_filters(
         mask &= build_contains_mask(df["color_tag"], parsed_query.color_tags)
 
     if parsed_query.group_tags:
-        group_columns = [
-            column
-            for column in ["tags_de_busqueda", "taxon_class", "family", "search_document"]
-            if column in df.columns
-        ]
-
-        if group_columns:
-            group_mask = pd.Series(False, index=df.index)
-
-            for column in group_columns:
-                group_mask |= build_contains_mask(df[column], parsed_query.group_tags)
-
-            mask &= group_mask
+        mask &= build_group_mask(df, parsed_query.group_tags)
 
     filtered_df = df.loc[mask].copy()
-
     if filtered_df.empty:
         return df.copy(), parsed_query, True
 
     return filtered_df, parsed_query, False
+
+
+def build_group_mask(df: pd.DataFrame, group_tags: list[str]) -> pd.Series:
+    """Construye máscara para grupos sin usar common names multilingües."""
+    group_mask = pd.Series(False, index=df.index)
+    taxon_columns = [
+        column
+        for column in ["kingdom", "taxon_class", "taxon_order", "family", "phylum"]
+        if column in df.columns
+    ]
+
+    if not taxon_columns:
+        return pd.Series(True, index=df.index)
+
+    for group_tag in group_tags:
+        expected_terms = GROUP_TO_TAXON_TEXT.get(group_tag, [group_tag])
+        for column in taxon_columns:
+            group_mask |= build_contains_mask(df[column], expected_terms)
+
+    return group_mask
 
 
 def build_contains_mask(series: pd.Series, tags: list[str]) -> pd.Series:

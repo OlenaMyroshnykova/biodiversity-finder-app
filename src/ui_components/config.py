@@ -1,20 +1,17 @@
-"""Configuración de UI."""
+"""Configuración de UI.
 
-LANGUAGE_FLAGS = [
-    {"code": "es", "label": "Español",    "image_url": "https://flagcdn.com/w80/es.png"},
-    {"code": "gb", "label": "English",    "image_url": "https://flagcdn.com/w80/gb.png"},
-    {"code": "ua", "label": "Українська", "image_url": "https://flagcdn.com/w80/ua.png"},
-    {"code": "pt", "label": "Português",  "image_url": "https://flagcdn.com/w80/pt.png"},
-    {"code": "it", "label": "Italiano",   "image_url": "https://flagcdn.com/w80/it.png"},
-    {"code": "ru", "label": "Русский",    "image_url": "https://flagcdn.com/w80/ru.png"},
-]
+La app ya no muestra banderas ni promete soporte multilingüe amplio.
+El buscador de demo se mantiene estable con español e inglés.
+"""
+
+SUPPORTED_SEARCH_LANGUAGES = ["Español", "English"]
 
 SEARCH_MODEL_DESCRIPTION = (
-    "Búsqueda combinada: traducción de lenguaje natural a filtros df.loc "
-    "(tamaño, hábitat, color, grupo) + TF-IDF por palabras y caracteres "
-    "sobre nombres comunes, taxonomía y etiquetas de búsqueda. "
-    "Cubre mamíferos, aves, reptiles, peces, anfibios, insectos, "
-    "arácnidos, plantas y hongos."
+    "Búsqueda estructurada: primero traduce lenguaje natural a filtros df.loc "
+    "(tamaño, hábitat, color, grupo) y solo después usa búsqueda textual "
+    "por nombre científico o nombre común en español/inglés. "
+    "Los nombres comunes de otros idiomas pueden mostrarse en las fichas, "
+    "pero no participan en el vibe-search principal."
 )
 
 MODEL_DASHBOARD_URL = "https://biodiversity-finder-training.streamlit.app/"
@@ -22,5 +19,5 @@ ARTIFACTS_URL = "https://huggingface.co/datasets/selenamir/biodiversity-finder-a
 
 
 def get_supported_languages_text() -> str:
-    """Devuelve nombres de idiomas."""
-    return ", ".join(language["label"] for language in LANGUAGE_FLAGS)
+    """Devuelve los idiomas realmente soportados por el buscador de demo."""
+    return ", ".join(SUPPORTED_SEARCH_LANGUAGES)

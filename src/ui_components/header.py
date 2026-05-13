@@ -14,20 +14,17 @@ from src.ui_components.config import (
 
 def render_header() -> None:
     """Renderiza cabecera principal."""
-    st.title("🐾 Biodiversity Finder")
-
+    st.title("Biodiversity Finder")
     st.info(
         "Enciclopedia inteligente de biodiversidad basada en datos reales de GBIF. "
-        "Puedes buscar en lenguaje natural o por nombre científico: "
-        "`un bicho pequeño del desierto`, `ave rosa de humedal`, "
-        "`jaguar`, `Panthera onca`, `cocodrilo`, `tiburón`, `крокодил`."
+        "Puedes buscar en lenguaje natural en español o inglés, o por nombre científico: "
+        "`un animal grande de la sabana`, `ave rosa de humedal`, "
+        "`jaguar`, `Panthera onca`, `cocodrilo`, `lion`."
     )
-
     st.link_button(
-        "📊 Ver métricas del modelo de clasificación taxonómica",
+        "Ver métricas del modelo de clasificación taxonómica",
         MODEL_DASHBOARD_URL,
     )
-
     render_search_system_info()
     render_ethics_notice()
 
@@ -35,21 +32,23 @@ def render_header() -> None:
 def render_search_system_info() -> None:
     """Muestra información sobre búsqueda y pipeline."""
     with st.expander("ℹ️ Cómo funciona el buscador", expanded=False):
-        st.markdown("#### 🌍 Idiomas soportados")
+        st.markdown("#### Idiomas soportados")
         st.write(
             get_supported_languages_text()
-            + " — puedes buscar en cualquiera de estos idiomas."
+            + " — el prototipo promete búsqueda estable solo en estos idiomas."
         )
 
-        st.markdown("#### 🔎 Motor de búsqueda")
+        st.markdown("#### Motor de búsqueda")
         st.write(SEARCH_MODEL_DESCRIPTION)
         st.caption(
             "Los nombres comunes (vernacular names) se obtienen de la API de GBIF "
             "y de Wikidata durante el pipeline de training, y se almacenan en el "
-            "campo `vernacular_names` de la enciclopedia."
+            "campo `vernacular_names` de la enciclopedia. Estos nombres se usan "
+            "para las fichas y como búsqueda secundaria por nombre, no para el "
+            "vibe-search principal."
         )
 
-        st.markdown("#### 🧠 Traductor de lenguaje natural")
+        st.markdown("#### Traductor de lenguaje natural")
         st.write(
             "Cuando escribes una frase como 'un bicho pequeño del desierto', "
             "el sistema la traduce automáticamente a máscaras booleanas de Pandas: "
@@ -58,24 +57,22 @@ def render_search_system_info() -> None:
             "Detecta tamaño, hábitat, color y grupo taxonómico."
         )
 
-        st.markdown("#### 🔄 Pipeline de datos")
+        st.markdown("#### Pipeline de datos")
         st.write(
             "El repositorio de training descarga observaciones desde la API de GBIF "
-            "para 15 grupos taxonómicos (mamíferos, aves, reptiles, peces, anfibios, "
-            "insectos, arácnidos, hongos y más). Combina fuentes con `pd.concat()`, "
+            "para varios grupos taxonómicos. Combina fuentes con `pd.concat()`, "
             "une datos climáticos de NASA POWER con `df.merge()`, enriquece con "
             "nombres comunes vía `df.merge()`, entrena un modelo de clasificación "
             "taxonómica y publica los artefactos en Hugging Face."
         )
-
-        st.link_button("📊 Abrir dashboard de métricas del modelo", MODEL_DASHBOARD_URL)
-        st.link_button("📦 Ver dataset y artefactos en Hugging Face", ARTIFACTS_URL)
+        st.link_button("Abrir dashboard de métricas del modelo", MODEL_DASHBOARD_URL)
+        st.link_button("Ver dataset y artefactos en Hugging Face", ARTIFACTS_URL)
 
 
 def render_ethics_notice() -> None:
     """Muestra aviso ético sobre limitaciones de los datos."""
     with st.expander("⚠️ Impacto ético y limitaciones — leer antes de usar", expanded=False):
-        st.markdown("#### 📊 Sobre los datos")
+        st.markdown("#### Sobre los datos")
         st.write(
             "Los datos provienen de GBIF (Global Biodiversity Information Facility), "
             "una plataforma de ciencia ciudadana y registros científicos. "
@@ -84,7 +81,7 @@ def render_ethics_notice() -> None:
             "lo que no refleja necesariamente la distribución real de las especies."
         )
 
-        st.markdown("#### 🔴 Sobre el estado de conservación")
+        st.markdown("#### Sobre el estado de conservación")
         st.warning(
             "Los estados de conservación mostrados son **estimaciones educativas** "
             "basadas en la rareza de los registros en el dataset, no evaluaciones "
@@ -93,7 +90,7 @@ def render_ethics_notice() -> None:
             "Consulta siempre fuentes oficiales como iucnredlist.org."
         )
 
-        st.markdown("#### 🏷️ Sobre las etiquetas de búsqueda")
+        st.markdown("#### Sobre las etiquetas de búsqueda")
         st.write(
             "Las etiquetas de color, hábitat y tamaño (`color_tag`, `habitat_tag`, "
             "`size_tag`) son **inferencias automáticas basadas en taxonomía**, "
@@ -102,17 +99,16 @@ def render_ethics_notice() -> None:
             "Tratar estas etiquetas como hechos biológicos sería un error."
         )
 
-        st.markdown("#### 🤖 Sobre la IA")
+        st.markdown("#### Sobre la IA")
         st.write(
             "Esta aplicación es una **herramienta de aprendizaje y exploración**, "
-            "no un sistema de identificación de especies. "
-            "Los resultados de búsqueda dependen de la calidad del dataset "
-            "y del modelo de clasificación entrenado con él. "
+            "no un sistema de identificación de especies. Los resultados dependen "
+            "de la calidad del dataset y del modelo de clasificación entrenado con él. "
             "No delegues decisiones críticas — científicas, legales o de conservación — "
             "en los resultados de esta app."
         )
 
-        st.markdown("#### 🌍 Sobre las especies invasoras")
+        st.markdown("#### Sobre las especies invasoras")
         st.info(
             "Algunas especies pueden aparecer en países donde no son nativas "
             "debido a registros de especímenes en cautiverio, jardines botánicos "

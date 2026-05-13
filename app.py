@@ -32,7 +32,7 @@ def main() -> None:
     """Ejecuta la aplicación."""
     st.set_page_config(
         page_title="Biodiversity Finder",
-        page_icon="🐾",
+        page_icon="🌿",
         layout="wide",
     )
 
@@ -56,34 +56,23 @@ def main() -> None:
         min_observations=min_observations,
     )
 
-    vibe_filtered_df, parsed_query, nl_fallback = apply_natural_language_filters(
+    vibe_filtered_df, parsed_query, used_fallback = apply_natural_language_filters(
         filtered_df,
         query_text,
     )
 
     if parsed_query.has_structured_filters:
-        if nl_fallback:
+        st.info(
+            "Natural Language to Query detectó filtros: "
+            f"size={parsed_query.size_tags or '-'}, "
+            f"habitat={parsed_query.habitat_tags or '-'}, "
+            f"color={parsed_query.color_tags or '-'}, "
+            f"group={parsed_query.group_tags or '-'}"
+        )
+        if used_fallback:
             st.warning(
-                f"⚠️ Los filtros detectados (size={parsed_query.size_tags or '-'}, "
-                f"habitat={parsed_query.habitat_tags or '-'}, "
-                f"color={parsed_query.color_tags or '-'}, "
-                f"group={parsed_query.group_tags or '-'}) "
-                "no encontraron resultados. Mostrando búsqueda general."
-            )
-        else:
-            detected = []
-            if parsed_query.size_tags:
-                detected.append(f"tamaño: {', '.join(parsed_query.size_tags)}")
-            if parsed_query.habitat_tags:
-                detected.append(f"hábitat: {', '.join(parsed_query.habitat_tags)}")
-            if parsed_query.color_tags:
-                detected.append(f"color: {', '.join(parsed_query.color_tags)}")
-            if parsed_query.group_tags:
-                detected.append(f"grupo: {', '.join(parsed_query.group_tags)}")
-            st.info(
-                "🧠 Filtros detectados en tu búsqueda: "
-                + " · ".join(detected)
-                + ". Aplicando filtros sobre la enciclopedia..."
+                "Los filtros estructurados no encontraron resultados exactos. "
+                "Se muestra búsqueda secundaria por nombre/texto."
             )
 
     result_df = semantic_search_encyclopedia(
@@ -94,20 +83,17 @@ def main() -> None:
 
     render_metrics(result_df, encyclopedia_df, metrics)
 
-    tabs = st.tabs(
-        [
-            "📚 Resultados",
-            "📊 Gráficos",
-            "✨ Plotly EDA",
-            "🧾 Datos",
-        ]
-    )
+    tabs = st.tabs([
+        "Resultados",
+        "Gráficos",
+        "✨ Plotly EDA",
+        "Datos",
+    ])
 
     with tabs[0]:
         st.caption(
-            "Cada tarjeta incluye un mapa desplegable 🗺️ con los puntos de avistamiento "
-            "registrados en GBIF para esa especie. "
-            "Los estados de conservación son estimaciones educativas, no evaluaciones IUCN oficiales."
+            "Cada resultado tiene su propio mapa en la sección "
+            "`Ver mapa de avistamientos para esta especie`."
         )
         render_species_cards(
             result_df,
@@ -121,12 +107,9 @@ def main() -> None:
         else:
             if query_text.strip() and "search_score" in result_df.columns:
                 st.altair_chart(build_search_score_chart(result_df), width="stretch")
-
             chart_column_1, chart_column_2 = st.columns(2)
-
             with chart_column_1:
                 st.altair_chart(build_class_distribution_chart(result_df), width="stretch")
-
             with chart_column_2:
                 st.altair_chart(build_map_points_chart(result_df), width="stretch")
 
@@ -137,16 +120,12 @@ def main() -> None:
             plotly_chart_1 = build_plotly_class_distribution(result_df)
             plotly_chart_2 = build_plotly_conservation_chart(result_df)
             plotly_chart_3 = build_plotly_habitat_chart(result_df)
-
             if plotly_chart_1 is not None:
                 st.plotly_chart(plotly_chart_1, width="stretch")
-
             chart_column_1, chart_column_2 = st.columns(2)
-
             with chart_column_1:
                 if plotly_chart_2 is not None:
                     st.plotly_chart(plotly_chart_2, width="stretch")
-
             with chart_column_2:
                 if plotly_chart_3 is not None:
                     st.plotly_chart(plotly_chart_3, width="stretch")
