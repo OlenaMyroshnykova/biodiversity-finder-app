@@ -37,7 +37,7 @@ def render_species_cards(
             st.markdown(
                 """
                 <div class="threatened-card-label">
-                    🚨 Especie marcada como amenazada o sensible en esta enciclopedia
+                    🚨 Esta especie figura como amenazada en los datos de conservación del dataset
                 </div>
                 """,
                 unsafe_allow_html=True,
@@ -144,6 +144,11 @@ def render_species_card_content(position: int, row: pd.Series) -> None:
     render_conservation_badge(row)
 
     st.markdown(build_sighting_narrative(row))
+    st.caption(
+        "⚠️ Las etiquetas de hábitat, tamaño y color son inferencias automáticas "
+        "basadas en taxonomía, no mediciones biológicas. "
+        "El estado de conservación es una estimación educativa, no una evaluación oficial IUCN."
+    )
 
     info_column_1, info_column_2, info_column_3 = st.columns(3)
 
@@ -178,11 +183,11 @@ def render_conservation_badge(row: pd.Series) -> None:
     is_threatened = bool(row.get("is_threatened", False))
 
     if is_threatened:
-        st.error(f"🚨 Conservation status: {status} — {category}")
+        st.error(f"🚨 Estado de conservación: {status} — {category} *(estimación educativa)*")
     elif status in {"NT", "DD"}:
-        st.warning(f"⚠️ Conservation status: {status} — {category}")
+        st.warning(f"⚠️ Estado de conservación: {status} — {category} *(estimación educativa)*")
     else:
-        st.success(f"🌿 Conservation status: {status} — {category}")
+        st.success(f"🌿 Estado de conservación: {status} — {category} *(estimación educativa)*")
 
 
 def format_common_names(value: object, max_names: int = 6) -> str:

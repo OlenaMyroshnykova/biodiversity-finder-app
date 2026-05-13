@@ -71,12 +71,19 @@ def main() -> None:
                 "no encontraron resultados. Mostrando búsqueda general."
             )
         else:
+            detected = []
+            if parsed_query.size_tags:
+                detected.append(f"tamaño: {', '.join(parsed_query.size_tags)}")
+            if parsed_query.habitat_tags:
+                detected.append(f"hábitat: {', '.join(parsed_query.habitat_tags)}")
+            if parsed_query.color_tags:
+                detected.append(f"color: {', '.join(parsed_query.color_tags)}")
+            if parsed_query.group_tags:
+                detected.append(f"grupo: {', '.join(parsed_query.group_tags)}")
             st.info(
-                "🧠 Natural Language to Query (df.loc): "
-                f"size={parsed_query.size_tags or '-'}, "
-                f"habitat={parsed_query.habitat_tags or '-'}, "
-                f"color={parsed_query.color_tags or '-'}, "
-                f"group={parsed_query.group_tags or '-'}"
+                "🧠 Filtros detectados en tu búsqueda: "
+                + " · ".join(detected)
+                + ". Aplicando filtros sobre la enciclopedia..."
             )
 
     result_df = semantic_search_encyclopedia(
@@ -98,8 +105,9 @@ def main() -> None:
 
     with tabs[0]:
         st.caption(
-            "Cada resultado tiene su propio mapa en la sección "
-            "`🗺️ Ver mapa de avistamientos para esta especie`."
+            "Cada tarjeta incluye un mapa desplegable 🗺️ con los puntos de avistamiento "
+            "registrados en GBIF para esa especie. "
+            "Los estados de conservación son estimaciones educativas, no evaluaciones IUCN oficiales."
         )
         render_species_cards(
             result_df,
