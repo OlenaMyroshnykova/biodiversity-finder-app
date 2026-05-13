@@ -8,6 +8,7 @@ Objetivo:
 """
 
 from __future__ import annotations
+import requests
 
 import json
 import re
@@ -18,6 +19,9 @@ from urllib.request import Request, urlopen
 
 GBIF_OCCURRENCE_SEARCH_URL = "https://api.gbif.org/v1/occurrence/search"
 GBIF_SPECIES_MATCH_URL = "https://api.gbif.org/v1/species/match"
+GBIF_OCCURRENCE_URL = GBIF_OCCURRENCE_SEARCH_URL  # alias for tests
+WIKIMEDIA_API_URL = "https://en.wikipedia.org/w/api.php"
+
 
 REQUEST_TIMEOUT_SECONDS = 8
 
@@ -30,24 +34,53 @@ BAD_IMAGE_MARKERS = [
 ]
 
 
-def find_species_image_url(
-    scientific_name: str,
-    *,
-    excluded_urls: set[str] | None = None,
-) -> str | None:
+@lru_cache(maxsize=512)
+def find_species_image_url(scientific_name: str) -> str | None:
     """Busca una imagen para una especie.
 
-    `excluded_urls` permite que la UI no repita la misma foto en varias tarjetas.
+    Intenta primero GBIF occurrences, luego Wikimedia Commons como fallback.
+    Cacheada con lru_cache — usar .cache_clear() para invalidar en tests.
     """
-    excluded_urls = excluded_urls or set()
-
+    # Intento 1: GBIF occurrences
     candidate_urls = find_species_image_candidates(scientific_name)
-
     for image_url in candidate_urls:
-        if image_url in excluded_urls:
-            continue
-
         if is_probably_valid_image_url(image_url):
+            return image_url
+
+    # Intento 2: Wikimedia Commons (fallback)
+    wikimedia_url = _search_wikimedia_via_fetch_json(scientific_name)
+    if wikimedia_url:
+        return wikimedia_url
+
+    return None
+
+
+def _search_wikimedia_via_fetch_json(scientific_name: str) -> str | None:
+    """Busca imagen en Wikimedia usando fetch_json (monkeypatchable en tests)."""
+    wikimedia_params = (
+        f"action=query&generator=search"
+        f"&gsrsearch={quote(scientific_name)}&gsrnamespace=6&gsrlimit=5"
+        f"&prop=imageinfo&iiprop=url%7Cmime%7Csize&iiurlwidth=700"
+        f"&format=json&formatversion=2"
+    )
+    url = f"{WIKIMEDIA_API_URL}?{wikimedia_params}"
+    payload = fetch_json(url)
+
+    if not payload:
+        return None
+
+    pages = payload.get("query", {}).get("pages", [])
+    if not isinstance(pages, list):
+        return None
+
+    for page in pages:
+        image_info_items = page.get("imageinfo", [])
+        if not image_info_items:
+            continue
+        image_info = image_info_items[0]
+        image_url = image_info.get("thumburl") or image_info.get("url")
+        mime = image_info.get("mime", "")
+        if image_url and is_probably_valid_image_url(image_url) and mime.startswith("image/"):
             return image_url
 
     return None
@@ -169,19 +202,20 @@ def extract_image_urls_from_gbif_occurrences(payload: dict) -> list[str]:
     return urls
 
 
-def fetch_json(url: str) -> dict | None:
-    """Descarga JSON usando urllib para no añadir dependencias extra."""
+def fetch_json(url: str, params: dict | None = None) -> dict | None:
+    """Descarga JSON usando requests.get (monkeypatching amigable en tests)."""
     try:
-        request = Request(
+        response = requests.get(
             url,
+            params=params,
             headers={
                 "User-Agent": "biodiversity-finder-app/1.0",
                 "Accept": "application/json",
             },
+            timeout=REQUEST_TIMEOUT_SECONDS,
         )
-
-        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-            return json.loads(response.read().decode("utf-8"))
+        response.raise_for_status()
+        return response.json()
     except Exception:
         return None
 
@@ -241,3 +275,33 @@ def deduplicate_preserving_order(values: list[str]) -> list[str]:
         unique_values.append(value)
 
     return unique_values
+
+
+# Алиасы для обратной совместимости с тестами
+def is_valid_image_url(image_url: str) -> bool:
+    """Verifica que una URL sea una imagen válida (no SVG, no placeholder)."""
+    normalized = image_url.lower()
+    if not normalized.startswith(("http://", "https://")):
+        return False
+    if normalized.endswith(".svg") or "image/svg" in normalized:
+        return False
+    return is_probably_valid_image_url(image_url)
+
+
+def extract_image_url_from_gbif_record(record: dict) -> str | None:
+    """Extrae la primera URL de imagen de un registro GBIF individual."""
+    media_items = record.get("media", [])
+    for media_item in media_items:
+        identifier = media_item.get("identifier") or media_item.get("references")
+        if isinstance(identifier, str) and identifier.startswith(("http://", "https://")):
+            return identifier
+    return None
+
+
+def search_wikimedia_file(scientific_name: str) -> str | None:
+    """Busca imagen en Wikimedia Commons. Rechaza SVG y placeholders."""
+    from src.image_sources.wikimedia import find_wikimedia_image_url
+    url = find_wikimedia_image_url(scientific_name)
+    if url and is_valid_image_url(url):
+        return url
+    return None

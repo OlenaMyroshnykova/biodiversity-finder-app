@@ -58,7 +58,8 @@ def test_find_species_image_uses_gbif_first(monkeypatch) -> None:
             }
         )
 
-    image_loader.find_species_image_url.clear()
+    image_loader.find_species_image_url.cache_clear()
+    image_loader.find_species_image_candidates.cache_clear()
     monkeypatch.setattr(image_loader.requests, "get", fake_get)
 
     assert image_loader.find_species_image_url("Vanessa atalanta") == "https://example.com/gbif-image.jpg"
@@ -95,14 +96,15 @@ def test_find_species_image_falls_back_to_wikimedia(monkeypatch) -> None:
             }
         )
 
-    image_loader.find_species_image_url.clear()
+    image_loader.find_species_image_url.cache_clear()
+    image_loader.find_species_image_candidates.cache_clear()
     monkeypatch.setattr(image_loader.requests, "get", fake_get)
 
     result = image_loader.find_species_image_url("Vanessa atalanta")
 
     assert result == "https://upload.wikimedia.org/example/Vanessa_atalanta.jpg"
-    assert image_loader.GBIF_OCCURRENCE_URL in calls
-    assert image_loader.WIKIMEDIA_API_URL in calls
+    assert any(image_loader.GBIF_OCCURRENCE_URL in call for call in calls)
+    assert any(image_loader.WIKIMEDIA_API_URL in call for call in calls)
 
 
 def test_wikimedia_ignores_bad_placeholder(monkeypatch) -> None:

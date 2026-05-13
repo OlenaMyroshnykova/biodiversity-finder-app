@@ -45,6 +45,7 @@ def apply_styles() -> None:
 
         .species-image-frame img {
             width: 100%;
+            max-width: 360px;
             height: clamp(220px, 24vw, 420px);
             aspect-ratio: 4 / 3;
             object-fit: contain;

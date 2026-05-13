@@ -42,9 +42,18 @@ def apply_score_thresholds(
     minimum_score: float = 0.015,
     relative_ratio: float = 0.08,
 ) -> pd.DataFrame:
-    """Quita coincidencias residuales extremadamente bajas."""
+    """Quita coincidencias residuales extremadamente bajas.
+
+    Si el DataFrame tiene un solo resultado, no aplica umbral relativo
+    para no silenciar el único candidato disponible.
+    """
     if result_df.empty or "search_score" not in result_df.columns:
         return result_df
+
+    # Con un solo resultado siempre lo devolvemos si tiene algún score
+    if len(result_df) == 1:
+        max_score = float(result_df["search_score"].max())
+        return result_df if max_score > 0 else result_df.iloc[0:0].copy()
 
     max_score = float(result_df["search_score"].max())
 
