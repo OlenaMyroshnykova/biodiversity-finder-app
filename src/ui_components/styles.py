@@ -1,68 +1,72 @@
-"""Estilos visuales de la app."""
+"""Visual styles for the Streamlit app."""
 from __future__ import annotations
 
 import streamlit as st
 
 
 def apply_styles() -> None:
-    """Aplica CSS ligero y responsive."""
+    """Apply stable, responsive CSS."""
     st.markdown(
         """
         <style>
-        .block-container {
-            padding-top: 1.6rem;
-            padding-bottom: 2rem;
-        }
-
-        [data-testid="stSidebar"] {
-            background: #f7fbf7;
-        }
-
         .species-image-frame {
-            margin: 0;
-            border: 1px solid rgba(49, 92, 54, 0.15);
-            border-radius: 14px;
+            width: 100%;
+            max-width: 360px;
+            margin: 0 auto 0.75rem auto;
+            border-radius: 18px;
             overflow: hidden;
-            background: #f8fbf8;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .species-image-frame img {
             width: 100%;
-            height: 220px;
-            object-fit: cover;
+            height: clamp(220px, 24vw, 420px);
+            aspect-ratio: 4 / 3;
+            object-fit: contain;
             display: block;
+            background: rgba(0, 0, 0, 0.10);
         }
 
-        .species-image-frame figcaption {
-            padding: 0.35rem 0.6rem;
-            color: #5d6b60;
-            font-size: 0.82rem;
+        .species-image-caption {
+            text-align: center;
+            font-size: 0.85rem;
+            opacity: 0.78;
+            margin-top: 0.25rem;
         }
 
         .species-image-placeholder {
-            min-height: 220px;
-            border: 1px dashed rgba(49, 92, 54, 0.25);
-            border-radius: 14px;
-            background: #f8fbf8;
-            color: #6d786f;
+            width: 100%;
+            height: clamp(220px, 24vw, 420px);
+            border-radius: 18px;
+            border: 1px dashed rgba(255, 255, 255, 0.25);
             display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
+            opacity: 0.72;
             padding: 1rem;
         }
 
-        div[data-testid="stMetric"] {
-            background: rgba(255, 255, 255, 0.78);
-            border: 1px solid rgba(49, 92, 54, 0.12);
-            border-radius: 14px;
-            padding: 0.7rem 0.9rem;
+        .threatened-card-note {
+            border-left: 4px solid #ff4b4b;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.75rem;
+            background: rgba(255, 75, 75, 0.08);
+            border-radius: 0.5rem;
         }
 
         @media (max-width: 768px) {
+            .species-image-frame {
+                max-width: 100%;
+            }
             .species-image-frame img,
             .species-image-placeholder {
-                height: 170px;
+                height: 220px;
             }
         }
         </style>
