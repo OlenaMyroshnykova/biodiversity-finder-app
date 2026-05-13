@@ -56,19 +56,28 @@ def main() -> None:
         min_observations=min_observations,
     )
 
-    vibe_filtered_df, parsed_query = apply_natural_language_filters(
+    vibe_filtered_df, parsed_query, nl_fallback = apply_natural_language_filters(
         filtered_df,
         query_text,
     )
 
     if parsed_query.has_structured_filters:
-        st.info(
-            "🧠 Natural Language to Query detectó filtros: "
-            f"size={parsed_query.size_tags or '-'}, "
-            f"habitat={parsed_query.habitat_tags or '-'}, "
-            f"color={parsed_query.color_tags or '-'}, "
-            f"group={parsed_query.group_tags or '-'}"
-        )
+        if nl_fallback:
+            st.warning(
+                f"⚠️ Los filtros detectados (size={parsed_query.size_tags or '-'}, "
+                f"habitat={parsed_query.habitat_tags or '-'}, "
+                f"color={parsed_query.color_tags or '-'}, "
+                f"group={parsed_query.group_tags or '-'}) "
+                "no encontraron resultados. Mostrando búsqueda general."
+            )
+        else:
+            st.info(
+                "🧠 Natural Language to Query (df.loc): "
+                f"size={parsed_query.size_tags or '-'}, "
+                f"habitat={parsed_query.habitat_tags or '-'}, "
+                f"color={parsed_query.color_tags or '-'}, "
+                f"group={parsed_query.group_tags or '-'}"
+            )
 
     result_df = semantic_search_encyclopedia(
         encyclopedia_df=vibe_filtered_df,

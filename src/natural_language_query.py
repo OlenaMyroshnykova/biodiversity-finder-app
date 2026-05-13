@@ -55,11 +55,52 @@ COLOR_KEYWORDS = {
 }
 
 GROUP_KEYWORDS = {
-    "insect": ["insect", "insecto", "bicho", "bug"],
-    "bird": ["bird", "ave", "pajaro", "pájaro"],
-    "mammal": ["mammal", "mamifero", "mamífero"],
-    "amphibian": ["amphibian", "anfibio", "frog", "rana"],
-    "plant": ["plant", "planta", "flower", "flor"],
+    "insect": [
+        "insect", "insecto", "bicho", "bug", "mariposa", "butterfly", "polilla", "moth",
+        "насекомое", "насекомые", "комаха",
+    ],
+    "bird": [
+        "bird", "ave", "pajaro", "pájaro", "aves",
+        "птица", "птах", "птицы",
+    ],
+    "mammal": [
+        "mammal", "mamifero", "mamífero", "mamíferos", "mamiferos",
+        "млекопитающее", "млекопитающие",
+    ],
+    "amphibian": [
+        "amphibian", "anfibio", "frog", "rana", "sapo", "toad", "anfibios",
+        "лягушка", "жаба", "амфибия",
+    ],
+    "plant": [
+        "plant", "planta", "flower", "flor", "árbol", "arbol", "tree",
+        "vegetal", "herb", "hierba", "растение", "рослина", "цветок",
+    ],
+    "reptile": [
+        "reptile", "reptil", "reptilia", "reptiles",
+        "cocodrilo", "cocodrilos", "crocodile", "crocodiles", "crocodilian",
+        "caiman", "caimán", "alligator",
+        "lagarto", "lagartos", "lizard", "lizards",
+        "serpiente", "serpientes", "snake", "snakes", "víbora", "vibora",
+        "iguana", "iguanas",
+        "крокодил", "крокодилы", "рептилия", "рептилии", "змея", "змеи", "ящерица",
+    ],
+    "fish": [
+        "fish", "pez", "peces", "pescado",
+        "tiburon", "tiburón", "tiburones", "shark", "sharks",
+        "raya", "rayas", "ray", "rays",
+        "рыба", "рыбы", "акула", "акулы", "скат",
+    ],
+    "spider": [
+        "spider", "spiders", "araña", "arañas", "arana",
+        "scorpion", "scorpions", "escorpion", "escorpión",
+        "arachnid", "aracnido", "arácnido",
+        "паук", "пауки", "скорпион",
+    ],
+    "fungi": [
+        "fungi", "fungus", "hongo", "hongos", "seta", "setas",
+        "mushroom", "mushrooms",
+        "гриб", "грибы",
+    ],
 }
 
 
@@ -122,12 +163,17 @@ def detect_tags(
 def apply_natural_language_filters(
     df: pd.DataFrame,
     query_text: str,
-) -> tuple[pd.DataFrame, ParsedNaturalQuery]:
-    """Aplica filtros con df.loc según la frase natural."""
+) -> tuple[pd.DataFrame, ParsedNaturalQuery, bool]:
+    """Aplica filtros con df.loc según la frase natural.
+
+    Devuelve (resultado_df, parsed_query, hubo_fallback).
+    hubo_fallback=True cuando los filtros no encontraron resultados
+    y se devuelve el df original sin filtrar.
+    """
     parsed_query = parse_natural_language_query(query_text)
 
     if df.empty or not parsed_query.has_structured_filters:
-        return df.copy(), parsed_query
+        return df.copy(), parsed_query, False
 
     mask = pd.Series(True, index=df.index)
 
@@ -158,9 +204,9 @@ def apply_natural_language_filters(
     filtered_df = df.loc[mask].copy()
 
     if filtered_df.empty:
-        return df.copy(), parsed_query
+        return df.copy(), parsed_query, True
 
-    return filtered_df, parsed_query
+    return filtered_df, parsed_query, False
 
 
 def build_contains_mask(series: pd.Series, tags: list[str]) -> pd.Series:
