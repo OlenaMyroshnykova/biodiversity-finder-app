@@ -42,7 +42,7 @@ def _deep_image_lookup_enabled() -> bool:
     This avoids many network calls per card. Set DEEP_IMAGE_LOOKUP=true only
     when you have time to wait and want more image coverage.
     """
-    return _env_bool("DEEP_IMAGE_LOOKUP", False)
+    return _env_bool("DEEP_IMAGE_LOOKUP", True)
 
 BAD_IMAGE_MARKERS = (
     "placeholder",
@@ -186,7 +186,10 @@ def build_image_search_names(scientific_name: str, common_names: str = "") -> li
     binomial_name = build_binomial_name(canonical_name)
     common_name_values = extract_common_name_values(common_names)
 
-    names = [binomial_name, canonical_name, cleaned_name, *common_name_values[:4]]
+    # Keep the original full name first for compatibility and for very specific taxa.
+    # Remote providers still canonicalize internally before building URLs/queries,
+    # so authorship does not break Wikipedia/Wikidata lookup.
+    names = [cleaned_name, canonical_name, binomial_name, *common_name_values[:4]]
     return [name for name in deduplicate_preserving_order(names) if len(name) >= 3]
 
 
