@@ -18,25 +18,41 @@ from src.offline_loader import (
 from src.ui_components.config import MODEL_DASHBOARD_URL, SEARCH_MODEL_DESCRIPTION
 
 PROJECT_SCOPE_KINGDOMS = {"Animalia", "Plantae"}
-MODE_OPTIONS: list[ArtifactMode] = ["online_full", "online_light", "offline_light"]
+MODE_OPTIONS: list[ArtifactMode] = [
+    ArtifactMode.ONLINE_FULL,
+    ArtifactMode.ONLINE_LIGHT,
+    ArtifactMode.OFFLINE_LOCAL,
+]
 
 
 def get_available_taxon_classes(df: pd.DataFrame) -> list[str]:
     """Return real taxonomic classes available in the loaded dataset."""
     if df.empty or "taxon_class" not in df.columns:
         return []
+
     scoped_df = df.copy()
     if "kingdom" in scoped_df.columns:
-        scoped_df = scoped_df[scoped_df["kingdom"].fillna("").astype(str).isin(PROJECT_SCOPE_KINGDOMS)]
+        scoped_df = scoped_df[
+            scoped_df["kingdom"].fillna("").astype(str).isin(PROJECT_SCOPE_KINGDOMS)
+        ]
+
     classes = scoped_df["taxon_class"].dropna().astype(str).str.strip()
     classes = classes[classes.ne("")]
     return sorted(classes.unique().tolist())
 
 
+def _safe_clear_streamlit_cache() -> None:
+    """Clear cached artifact loaders after download/delete of local files."""
+    try:
+        st.cache_data.clear()
+    except Exception:  # pragma: no cover - Streamlit runtime dependent
+        return
+
+
 def _safe_rerun() -> None:
     try:
         st.rerun()
-    except Exception:  # pragma: no cover
+    except Exception:  # pragma: no cover - Streamlit runtime dependent
         return
 
 
@@ -56,9 +72,14 @@ def _render_offline_artifact_actions() -> None:
                     status.update(label="No se pudieron descargar los artifacts.", state="error")
                     st.sidebar.error(str(exc))
                     return
+
                 status.update(label="Artifacts offline descargados.", state="complete")
-                st.sidebar.success("Guardado en data/offline: " + ", ".join(path.name for path in downloaded))
-            _safe_rerun()
+                st.sidebar.success(
+                    "Guardado en data/offline: "
+                    + ", ".join(path.name for path in downloaded)
+                )
+                _safe_clear_streamlit_cache()
+                _safe_rerun()
         return
 
     st.sidebar.success("Artifacts offline disponibles en data/offline.")
@@ -67,6 +88,7 @@ def _render_offline_artifact_actions() -> None:
         for path in expected_offline_files():
             size_kb = path.stat().st_size / 1024 if path.exists() else 0
             st.caption(f"- {path.name} ({size_kb:,.0f} KB)")
+
         st.warning(
             "Eliminar solo borra la copia local en data/offline. "
             "No toca Hugging Face ni los artifacts del repo training."
@@ -77,6 +99,7 @@ def _render_offline_artifact_actions() -> None:
                 st.success("Eliminados: " + ", ".join(path.name for path in removed))
             else:
                 st.info("No había artifacts offline para eliminar.")
+            _safe_clear_streamlit_cache()
             _safe_rerun()
 
 
@@ -93,12 +116,13 @@ def render_data_mode_selector() -> ArtifactMode:
         format_func=lambda mode: MODE_LABELS[mode],
         help=(
             "Online completo usa el artifact completo de Hugging Face. "
-            "Online ligero usa el parquet comprimido. Offline local usa data/offline."
+            "Online ligero usa el parquet comprimido. "
+            "Offline local usa data/offline."
         ),
     )
     st.sidebar.caption(describe_artifact_mode(selected_mode))
 
-    if selected_mode == "offline_light":
+    if selected_mode == ArtifactMode.OFFLINE_LOCAL:
         _render_offline_artifact_actions()
 
     st.sidebar.divider()
@@ -109,7 +133,9 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
     """Render search and filter controls after the data mode has been selected."""
     st.sidebar.markdown("### Idiomas")
     st.sidebar.caption("Búsqueda principal disponible en Español e English.")
-    st.sidebar.caption("Los nombres comunes se usan como apoyo visual y búsqueda secundaria por nombre.")
+    st.sidebar.caption(
+        "Los nombres comunes se usan como apoyo visual y búsqueda secundaria por nombre."
+    )
     st.sidebar.divider()
 
     st.sidebar.header("Búsqueda")
@@ -117,6 +143,7 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
         "Busca en lenguaje natural o por nombre científico",
         placeholder="animal grande de la sabana",
     )
+
     selected_classes = st.sidebar.multiselect(
         "Filtrar por clase taxonómica disponible en el dataset",
         options=get_available_taxon_classes(df),

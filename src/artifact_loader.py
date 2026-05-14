@@ -4,9 +4,8 @@ Architecture:
 - Online complete: use the full Hugging Face artifact for maximum search coverage.
 - Online light: use the compressed/light Hugging Face artifact for quick demos.
 - Offline local: use data/offline light artifacts previously downloaded by the app.
-
-The app chooses the mode from the Streamlit sidebar and passes it to these loaders.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +21,12 @@ from src.artifact_contract import (
     normalize_artifact_dataframe,
     validate_artifact_contract,
 )
-from src.offline_loader import ArtifactMode, OFFLINE_DATA_DIR, get_default_artifact_mode
+from src.offline_loader import (
+    ArtifactMode,
+    OFFLINE_DATA_DIR,
+    get_default_artifact_mode,
+    normalize_artifact_mode,
+)
 
 REPO_ID = "selenamir/biodiversity-finder-artifacts"
 REPO_TYPE = "dataset"
@@ -44,9 +48,9 @@ OCCURRENCE_POINT_COLUMNS = [
 
 
 def _resolve_mode(artifact_mode: ArtifactMode | str | None) -> ArtifactMode:
-    if artifact_mode in {"online_full", "online_light", "offline_light"}:
-        return artifact_mode  # type: ignore[return-value]
-    return get_default_artifact_mode()
+    if artifact_mode is None:
+        return get_default_artifact_mode()
+    return normalize_artifact_mode(artifact_mode)
 
 
 def _download_artifact(filename: str) -> str:
@@ -76,7 +80,7 @@ def _read_parquet_selected_columns(file_path: str | Path, expected_columns: list
 
 
 def _online_filename(mode: ArtifactMode, full_file: str, light_file: str) -> str:
-    return light_file if mode == "online_light" else full_file
+    return light_file if mode == ArtifactMode.ONLINE_LIGHT else full_file
 
 
 @st.cache_data(show_spinner="Cargando enciclopedia de especies...")
@@ -84,7 +88,7 @@ def load_encyclopedia(artifact_mode: ArtifactMode | str | None = None) -> pd.Dat
     """Load the encyclopedia according to the selected frontend mode."""
     mode = _resolve_mode(artifact_mode)
 
-    if mode == "offline_light":
+    if mode == ArtifactMode.OFFLINE_LOCAL:
         offline_path = OFFLINE_DATA_DIR / "species_encyclopedia_light.parquet"
         if offline_path.exists():
             df = _read_parquet_selected_columns(offline_path, ARTIFACT_COLUMNS)
@@ -92,7 +96,7 @@ def load_encyclopedia(artifact_mode: ArtifactMode | str | None = None) -> pd.Dat
         st.warning(
             "Modo offline seleccionado, pero falta "
             "data/offline/species_encyclopedia_light.parquet. "
-            "Cambia a modo online o ejecuta scripts/download_offline_artifacts.py."
+            "Cambia a modo online o descarga los artifacts desde la barra lateral."
         )
         return pd.DataFrame(columns=ARTIFACT_COLUMNS)
 
@@ -118,7 +122,7 @@ def load_occurrence_points(artifact_mode: ArtifactMode | str | None = None) -> p
     """Load occurrence points for Folium maps according to the selected mode."""
     mode = _resolve_mode(artifact_mode)
 
-    if mode == "offline_light":
+    if mode == ArtifactMode.OFFLINE_LOCAL:
         offline_path = OFFLINE_DATA_DIR / "species_occurrence_points_light.parquet"
         if offline_path.exists():
             return _read_parquet_selected_columns(offline_path, OCCURRENCE_POINT_COLUMNS)
@@ -137,7 +141,7 @@ def load_metrics(artifact_mode: ArtifactMode | str | None = None) -> dict:
     """Load model metrics from local offline artifacts or Hugging Face."""
     mode = _resolve_mode(artifact_mode)
 
-    if mode == "offline_light":
+    if mode == ArtifactMode.OFFLINE_LOCAL:
         offline_path = OFFLINE_DATA_DIR / "metrics.json"
         if offline_path.exists():
             with open(offline_path, "r", encoding="utf-8") as metrics_file:
@@ -153,12 +157,7 @@ def load_metrics(artifact_mode: ArtifactMode | str | None = None) -> dict:
 
 
 def _normalize_project_scope(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep the app scope aligned with the project: animals and plants only.
-
-    This helper is intentionally exported because legacy tests and small UI
-    utilities use it directly. The heavy contract normalization still lives in
-    ``src.artifact_contract``.
-    """
+    """Keep the app scope aligned with the project: animals and plants only."""
     if df is None or df.empty or "kingdom" not in df.columns:
         return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
 
