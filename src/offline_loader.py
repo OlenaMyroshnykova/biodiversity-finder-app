@@ -1,14 +1,17 @@
-"""Utilities for selecting, explaining and downloading offline artifacts.
+"""Helpers for app data modes and local offline artifacts.
 
-The Streamlit UI chooses the data mode at runtime. Environment variables remain
-useful for deployment defaults, but the frontend selector is the source of truth
-during a user session.
+The app can run in three modes:
+- online_full: full Hugging Face artifacts
+- online_light: light Hugging Face artifacts
+- offline_light: local light artifacts stored in data/offline/
+
+This module is intentionally small and stable because both the Streamlit UI and
+contract tests rely on these names.
 """
 
 from __future__ import annotations
 
 import os
-import shutil
 from pathlib import Path
 from typing import Literal
 
@@ -19,13 +22,21 @@ ArtifactMode = Literal["online_full", "online_light", "offline_light"]
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OFFLINE_DATA_DIR = PROJECT_ROOT / "data" / "offline"
 
-HF_REPO_ID = "selenamir/biodiversity-finder-artifacts"
+HF_REPO_ID = os.getenv("HF_ARTIFACT_REPO_ID", "selenamir/biodiversity-finder-artifacts")
 HF_REPO_TYPE = "dataset"
 
-OFFLINE_ARTIFACTS: dict[str, str] = {
-    "species_encyclopedia_light.parquet": "processed/species_encyclopedia_light.parquet",
-    "species_occurrence_points_light.parquet": "processed/species_occurrence_points_light.parquet",
-    "metrics.json": "reports/metrics.json",
+# Stable local filenames expected by tests, UI and the artifact loader.
+OFFLINE_ARTIFACTS: tuple[str, ...] = (
+    "species_encyclopedia_light.parquet",
+    "species_occurrence_points_light.parquet",
+    "metrics.json",
+)
+
+# Remote Hugging Face path -> local stable filename.
+OFFLINE_ARTIFACT_MAP: dict[str, str] = {
+    "processed/species_encyclopedia_light.parquet": "species_encyclopedia_light.parquet",
+    "processed/species_occurrence_points_light.parquet": "species_occurrence_points_light.parquet",
+    "reports/metrics.json": "metrics.json",
 }
 
 MODE_LABELS: dict[ArtifactMode, str] = {
@@ -42,11 +53,11 @@ def _truthy_env(name: str, default: str = "false") -> bool:
 
 def expected_offline_files() -> list[Path]:
     """Files expected for working without network access."""
-    return [OFFLINE_DATA_DIR / local_name for local_name in OFFLINE_ARTIFACTS]
+    return [OFFLINE_DATA_DIR / filename for filename in OFFLINE_ARTIFACTS]
 
 
 def missing_offline_files() -> list[Path]:
-    """Return the offline files that still need to be downloaded."""
+    """Return the offline files that are still missing locally."""
     return [path for path in expected_offline_files() if not path.exists()]
 
 
@@ -55,40 +66,44 @@ def has_offline_artifacts() -> bool:
     return not missing_offline_files()
 
 
-def download_offline_artifacts(target_dir: Path | None = None) -> list[Path]:
-    """Download light artifacts from Hugging Face into the local offline folder.
+def download_offline_artifacts() -> list[Path]:
+    """Download light artifacts from Hugging Face into data/offline/.
 
-    The app can only reliably re-use offline artifacts from one known path:
-    ``data/offline`` inside this repository. A custom target is accepted for
-    tests and advanced scripts, but the UI intentionally shows the fixed path so
-    the next run can load the files automatically.
+    The fixed local folder is intentional: after the download, Offline local can
+    reliably load the files without asking the user for a path. Keeping
+    hf_hub_download imported at module level also makes this function easy to
+    monkeypatch in tests.
     """
-    destination_dir = target_dir or OFFLINE_DATA_DIR
-    destination_dir.mkdir(parents=True, exist_ok=True)
-
+    OFFLINE_DATA_DIR.mkdir(parents=True, exist_ok=True)
     token = os.getenv("HF_TOKEN") or None
-    downloaded_paths: list[Path] = []
+    saved_paths: list[Path] = []
 
-    for local_name, hf_filename in OFFLINE_ARTIFACTS.items():
+    for remote_filename, local_name in OFFLINE_ARTIFACT_MAP.items():
         cached_path = hf_hub_download(
             repo_id=HF_REPO_ID,
             repo_type=HF_REPO_TYPE,
-            filename=hf_filename,
+            filename=remote_filename,
             token=token,
         )
-        destination_path = destination_dir / local_name
-        shutil.copyfile(cached_path, destination_path)
-        downloaded_paths.append(destination_path)
+        target_path = OFFLINE_DATA_DIR / local_name
+        target_path.write_bytes(Path(cached_path).read_bytes())
+        saved_paths.append(target_path)
 
-    return downloaded_paths
+    return saved_paths
+
+
+def delete_offline_artifacts() -> list[Path]:
+    """Delete only the known local offline artifacts from data/offline/."""
+    removed: list[Path] = []
+    for path in expected_offline_files():
+        if path.exists():
+            path.unlink()
+            removed.append(path)
+    return removed
 
 
 def get_default_artifact_mode() -> ArtifactMode:
-    """Deployment default for the sidebar selector.
-
-    OFFLINE_MODE=true wins only when local light artifacts are available.
-    Otherwise the app starts in online mode and explains what is missing.
-    """
+    """Deployment default for the sidebar selector."""
     if _truthy_env("OFFLINE_MODE", "false") and has_offline_artifacts():
         return "offline_light"
     if _truthy_env("USE_LIGHT_ARTIFACTS", "false"):
@@ -97,18 +112,17 @@ def get_default_artifact_mode() -> ArtifactMode:
 
 
 def describe_artifact_mode(mode: ArtifactMode | str) -> str:
-    """Short text for the sidebar and the presentation/demo."""
+    """Short text for the sidebar and demo."""
     if mode == "offline_light":
         if has_offline_artifacts():
             return (
                 "Modo offline local: la app lee data/offline/*.parquet y no depende "
                 "de Hugging Face para la enciclopedia ni los mapas."
             )
-        missing = [path.name for path in missing_offline_files()]
+        missing = ", ".join(path.name for path in missing_offline_files())
         return (
             "Modo offline solicitado, pero faltan archivos locales: "
-            + ", ".join(missing)
-            + ". Puedes descargarlos desde este panel."
+            f"{missing}. Puedes descargarlos desde el botón del panel lateral."
         )
     if mode == "online_light":
         return (
