@@ -150,3 +150,64 @@ def load_metrics(artifact_mode: ArtifactMode | str | None = None) -> dict:
             return json.load(metrics_file)
     except Exception:
         return {"accuracy": None, "note": "Métricas no disponibles."}
+
+
+def _normalize_project_scope(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep the app scope aligned with the project: animals and plants only.
+
+    This helper is intentionally exported because legacy tests and small UI
+    utilities use it directly. The heavy contract normalization still lives in
+    ``src.artifact_contract``.
+    """
+    if df is None or df.empty or "kingdom" not in df.columns:
+        return df.copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
+
+    scoped_df = df.copy()
+    kingdom_normalized = scoped_df["kingdom"].fillna("").astype(str).str.strip().str.lower()
+    allowed_mask = kingdom_normalized.isin({"animalia", "plantae"})
+    return scoped_df.loc[allowed_mask].reset_index(drop=True)
+
+
+def _normalize_conservation_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure stable IUCN/conservation columns without inventing LC statuses."""
+    normalized_df = df.copy()
+
+    if "iucn_category" not in normalized_df.columns:
+        normalized_df["iucn_category"] = "NO_DATA"
+    else:
+        normalized_df["iucn_category"] = (
+            normalized_df["iucn_category"]
+            .fillna("NO_DATA")
+            .astype(str)
+            .str.strip()
+            .replace({"": "NO_DATA", "nan": "NO_DATA", "None": "NO_DATA"})
+        )
+
+    if "iucn_status_label" not in normalized_df.columns:
+        normalized_df["iucn_status_label"] = normalized_df["iucn_category"]
+    else:
+        normalized_df["iucn_status_label"] = (
+            normalized_df["iucn_status_label"]
+            .fillna(normalized_df["iucn_category"])
+            .astype(str)
+            .str.strip()
+            .replace({"": "NO_DATA", "nan": "NO_DATA", "None": "NO_DATA"})
+        )
+
+    if "conservation_source" not in normalized_df.columns:
+        normalized_df["conservation_source"] = "No IUCN data"
+    else:
+        normalized_df["conservation_source"] = (
+            normalized_df["conservation_source"]
+            .fillna("No IUCN data")
+            .astype(str)
+            .str.strip()
+            .replace({"": "No IUCN data", "nan": "No IUCN data", "None": "No IUCN data"})
+        )
+
+    no_data_mask = normalized_df["iucn_category"].str.upper().eq("NO_DATA")
+    normalized_df.loc[no_data_mask, "conservation_source"] = normalized_df.loc[
+        no_data_mask, "conservation_source"
+    ].replace({"IUCN Red List": "No IUCN data", "": "No IUCN data"})
+
+    return normalized_df

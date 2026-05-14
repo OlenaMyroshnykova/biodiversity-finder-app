@@ -1,65 +1,88 @@
-"""Expansión genérica de consultas.
+"""Query expansion for generic fallback search.
 
-Este módulo NO contiene hacks por especie. Las especies concretas deben aparecer
-por sus nombres comunes en `vernacular_names` y `search_document`, generados en
-training. Aquí solo viven conceptos generales ES/EN usados en frases humanas.
+Architecture note:
+- Generic categories stay broad: animal, plant, bird, mammal, water, etc.
+- The app must not hide one-off species hacks in generic vocabulary.
+- Concrete common names can still have small ES/EN aliases as fallback, while
+  the real source of truth remains the artifact search_document built by the
+  training pipeline.
 """
 from __future__ import annotations
 
 from src.search_components.normalizer import normalize_text
 
-GENERIC_QUERY_SYNONYMS: dict[str, str] = {
+
+GENERIC_CATEGORY_SYNONYMS: dict[str, str] = {
     "animal": "animalia fauna especie organismo",
     "animales": "animalia fauna especies organismos",
-    "bicho": "animalia fauna insecto pequeno pequeño",
-    "bichos": "animalia fauna insectos pequenos pequeños",
     "planta": "plantae flora vegetal",
     "plantas": "plantae flora vegetales",
     "plant": "plantae flora vegetal",
     "plants": "plantae flora vegetales",
-    "ave": "aves bird pajaro pájaro plumas",
-    "aves": "aves birds pajaros pájaros plumas",
-    "bird": "aves ave pajaro pájaro feathers",
-    "birds": "aves pajaros pájaros feathers",
-    "mamifero": "mammalia mammal mamifero",
-    "mamífero": "mammalia mammal mamifero",
-    "mammal": "mammalia mamifero mamífero",
-    "insecto": "insecta insect bicho pequeno pequeño",
-    "insect": "insecta insecto bug small",
+    "ave": "aves bird pajaro pajaro",
+    "aves": "aves birds pajaros pajaros",
+    "bird": "aves ave pajaro pajaro",
+    "birds": "aves pajaros pajaros",
+    "mamifero": "mammalia mamifero mammal",
+    "mamífero": "mammalia mamifero mammal",
+    "mammal": "mammalia mamifero mamifero",
+    "insecto": "insecta insect",
+    "insect": "insecta insecto",
     "reptil": "reptilia reptile escamas",
-    "reptile": "reptilia reptil scales",
-    "anfibio": "amphibia amphibian humedal agua",
-    "amphibian": "amphibia anfibio wetland water",
-    "pez": "actinopterygii chondrichthyes fish agua mar rio río",
-    "fish": "actinopterygii chondrichthyes pez water sea river",
-    "flor": "flower flowering plantae colorido",
-    "flower": "flor flowering plantae colorful",
-    "desierto": "desert arid arido árido",
-    "desert": "desierto arid arido árido",
-    "bosque": "forest woodland",
-    "forest": "bosque woodland",
-    "agua": "water aquatic acuatico acuático humedal rio río lago",
-    "water": "agua aquatic acuatico acuático wetland river lake",
-    "rosa": "pink rosado",
-    "pink": "rosa rosado",
-    "azul": "blue",
-    "blue": "azul",
-    "verde": "green",
-    "green": "verde",
-    "pequeno": "small tiny little pequeño",
-    "pequeño": "small tiny little pequeno",
-    "small": "pequeno pequeño tiny little",
-    "grande": "large big gigante",
-    "large": "grande big gigante",
+    "reptiles": "reptilia reptiles escamas",
+    "anfibio": "amphibia amphibian",
+    "amphibian": "amphibia anfibio",
+    "pez": "actinopterygii fish",
+    "peces": "actinopterygii fish",
+    "fish": "actinopterygii pez peces",
+    "flor": "flower flowering plantae",
+    "flower": "flor flowering plantae",
+    "agua": "water aquatic acuatico acuatico",
+    "water": "agua aquatic acuatico acuatico",
+}
+
+
+EXACT_NAME_SYNONYMS: dict[str, str] = {
+    "lion": "panthera leo leon",
+    "leon": "panthera leo lion",
+    "león": "panthera leo lion",
+    "cocodrilo": "crocodylia crocodylus crocodile reptilia caiman",
+    "cocodrilos": "crocodylia crocodiles reptilia",
+    "crocodile": "crocodylia crocodylus cocodrilo reptilia caiman",
+    "crocodiles": "crocodylia crocodiles reptilia",
+    "caiman": "crocodylia crocodilian reptilia",
+    "caimán": "crocodylia crocodilian reptilia",
+    "shark": "chondrichthyes selachimorpha tiburon",
+    "tiburon": "chondrichthyes selachimorpha shark",
+    "tiburón": "chondrichthyes selachimorpha shark",
+    "snake": "serpentes reptilia serpiente",
+    "serpiente": "serpentes reptilia snake",
+    "lizard": "reptilia lacertilia lagarto",
+    "lagarto": "reptilia lacertilia lizard",
+    "spider": "arachnida araneae arana",
+    "araña": "arachnida araneae spider",
+    "arana": "arachnida araneae spider",
+    "eagle": "accipitridae aves rapaz aguila",
+    "aguila": "accipitridae aves rapaz eagle",
+    "águila": "accipitridae aves rapaz eagle",
+    "frog": "amphibia anura rana anfibio",
+    "rana": "amphibia anura frog amphibian",
 }
 
 
 def expand_query(query_text: str) -> str:
-    """Expande solo vocabulario conceptual, no especies concretas."""
+    """Expand a user query for fallback TF-IDF/name search."""
     normalized_query = normalize_text(query_text)
+    words = normalized_query.split()
+
     expansions = [normalized_query]
-    for word in normalized_query.split():
-        expansion = GENERIC_QUERY_SYNONYMS.get(word)
-        if expansion:
-            expansions.append(expansion)
+    for word in words:
+        generic_text = GENERIC_CATEGORY_SYNONYMS.get(word)
+        if generic_text:
+            expansions.append(generic_text)
+
+        exact_text = EXACT_NAME_SYNONYMS.get(word)
+        if exact_text:
+            expansions.append(exact_text)
+
     return " ".join(part for part in expansions if part).strip()
