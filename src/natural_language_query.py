@@ -1,24 +1,22 @@
-"""Translator from natural language to Pandas boolean masks.
+"""Traductor simple de lenguaje natural a máscaras booleanas de Pandas.
 
-Architecture note
------------------
-The natural-language layer is responsible for structured concepts such as
-size, habitat, color and broad biological group. These concepts should not be
-sent unchanged to the TF-IDF name search, because phrases like "animal grande
-de la sabana" can accidentally rank a species whose common name contains only
-"Grande".
-
-The module therefore returns two things:
-- a strict df.loc result when all detected structured filters match;
-- a soft structured ranking used when strict AND filtering finds nothing.
+Arquitectura para el entregable:
+- El vibe-search principal usa español e inglés.
+- Los nombres comunes multilingües no participan en filtros estructurados.
+- La app convierte frases naturales en columnas normalizadas: size/habitat/color/group.
+- Si el filtro exacto no existe en el artifact, se relaja de forma controlada sin
+  caer en una búsqueda textual aleatoria que contradiga el hábitat pedido.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 import pandas as pd
 
 from src.search_components.normalizer import normalize_text
+
 
 SIZE_KEYWORDS = {
     "small": ["small", "little", "tiny", "pequeno", "pequeño", "chico", "mini"],
@@ -30,10 +28,23 @@ HABITAT_KEYWORDS = {
     "desert": ["desert", "desierto", "arid", "arido", "árido"],
     "wetland": ["wetland", "humedal", "water", "agua", "river", "rio", "río", "lake", "lago"],
     "forest": ["forest", "bosque", "jungle", "selva"],
-    "savanna": ["savanna", "sabana", "savana", "grassland", "pastizal"],
+    "savanna": ["savanna", "sabana", "savana", "grassland", "pradera"],
     "mountain": ["mountain", "montana", "montaña"],
     "polar": ["polar", "ice", "hielo", "arctic", "artico", "ártico"],
     "meadow": ["meadow", "pradera", "garden", "jardin", "jardín"],
+    "ocean": ["ocean", "sea", "marine", "oceano", "océano", "mar", "marino"],
+}
+
+# Términos equivalentes o próximos para no devolver 0 cuando el artifact usa
+# "grassland/pradera" en vez de "savanna/sabana". Se mantiene el sentido ecológico.
+HABITAT_RELATED_TERMS = {
+    "savanna": ["savanna", "savana", "sabana", "grassland", "grasslands", "prairie", "pradera", "meadow"],
+    "desert": ["desert", "desierto", "arid", "arido", "árido"],
+    "wetland": ["wetland", "humedal", "water", "agua", "river", "rio", "río", "lake", "lago"],
+    "forest": ["forest", "bosque", "jungle", "selva", "woodland"],
+    "mountain": ["mountain", "montana", "montaña", "alpine"],
+    "polar": ["polar", "ice", "hielo", "arctic", "artico", "ártico", "tundra"],
+    "meadow": ["meadow", "pradera", "grassland", "garden", "jardin", "jardín"],
     "ocean": ["ocean", "sea", "marine", "oceano", "océano", "mar", "marino"],
 }
 
@@ -42,47 +53,54 @@ COLOR_KEYWORDS = {
     "white": ["white", "blanco", "blanca"],
     "brown": ["brown", "marron", "marrón", "dorado", "golden"],
     "green": ["green", "verde"],
+    "gray": ["gray", "grey", "gris"],
     "black": ["black", "negro", "negra"],
-    "grey": ["grey", "gray", "gris"],
     "colorful": ["colorful", "multicolor", "bright", "colorido", "colores"],
 }
 
 GROUP_KEYWORDS = {
-    "animal": ["animal", "animals", "animales", "bicho", "criatura"],
-    "insect": ["insect", "insecto", "bug", "mariposa", "butterfly", "moth", "polilla"],
-    "bird": ["bird", "birds", "ave", "aves", "pajaro", "pájaro"],
-    "mammal": ["mammal", "mammals", "mamifero", "mamífero", "mamiferos", "mamíferos"],
+    "animal": ["animal", "animals", "animales", "bicho", "criatura", "fauna"],
+    "insect": ["insect", "insecto", "bug", "mariposa", "butterfly", "polilla", "moth"],
+    "bird": ["bird", "ave", "pajaro", "pájaro", "aves"],
+    "mammal": ["mammal", "mamifero", "mamífero", "mamíferos", "mamiferos"],
     "amphibian": ["amphibian", "anfibio", "anfibios", "frog", "rana", "sapo", "toad"],
-    "plant": ["plant", "plants", "planta", "plantas", "flower", "flor", "arbol", "árbol", "tree"],
-    "reptile": ["reptile", "reptiles", "reptil", "reptilia", "cocodrilo", "crocodile", "snake", "serpiente", "lizard", "lagarto"],
-    "fish": ["fish", "pez", "peces", "shark", "tiburon", "tiburón", "ray", "raya"],
-    "spider": ["spider", "spiders", "araña", "arañas", "arana", "scorpion", "escorpion", "escorpión", "arachnid"],
-    "fungi": ["fungi", "fungus", "hongo", "hongos", "seta", "setas", "mushroom", "mushrooms"],
+    "plant": ["plant", "plants", "planta", "plantas", "flower", "flor", "arbol", "árbol", "tree", "vegetal"],
+    "reptile": ["reptile", "reptil", "reptiles", "cocodrilo", "crocodile", "caiman", "caimán", "lagarto", "lizard", "serpiente", "snake", "iguana"],
+    "fish": ["fish", "pez", "peces", "tiburon", "tiburón", "shark", "raya", "ray"],
+    "spider": ["spider", "spiders", "araña", "arañas", "arana", "scorpion", "escorpion", "escorpión", "arachnid", "aracnido", "arácnido"],
 }
 
-GROUP_TO_TAXON_TERMS = {
+GROUP_TO_TAXON_TEXT = {
     "animal": ["animalia"],
-    "insect": ["insecta", "lepidoptera", "papilionidae"],
-    "bird": ["aves", "accipitridae", "anatidae", "laridae"],
+    "insect": ["insecta", "lepidoptera"],
+    "bird": ["aves"],
     "mammal": ["mammalia"],
-    "amphibian": ["amphibia", "anura"],
-    "plant": ["plantae", "magnoliopsida"],
-    "reptile": ["reptilia", "crocodylia", "serpentes", "lacertilia"],
-    "fish": ["actinopterygii", "chondrichthyes", "teleostei", "selachimorpha"],
+    "amphibian": ["amphibia"],
+    "plant": ["plantae", "magnoliopsida", "liliopsida", "pinopsida", "polypodiopsida"],
+    "reptile": ["reptilia", "crocodylia", "squamata"],
+    "fish": ["actinopterygii", "chondrichthyes", "pisces", "teleostei"],
     "spider": ["arachnida", "araneae", "scorpiones"],
-    "fungi": ["fungi", "basidiomycota", "ascomycota"],
 }
 
-GROUP_FILTER_COLUMNS = ["kingdom", "taxon_class", "taxon_order", "family", "genus"]
-STOPWORDS = {
-    "un", "una", "unos", "unas", "el", "la", "los", "las", "de", "del", "que",
-    "vive", "viven", "en", "con", "y", "o", "por", "para", "tipo", "especie",
+STRUCTURED_VOCABULARIES = [
+    SIZE_KEYWORDS,
+    HABITAT_KEYWORDS,
+    COLOR_KEYWORDS,
+    GROUP_KEYWORDS,
+]
+
+# Palabras funcionales que quedan cuando quitamos filtros estructurados de una
+# frase como "animal grande de la sabana". No deben alimentar el fallback textual.
+REMAINING_TEXT_STOPWORDS = {
+    "a", "an", "the", "of", "in", "on", "at", "from", "with", "and", "or",
+    "un", "una", "unos", "unas", "el", "la", "los", "las", "de", "del",
+    "al", "en", "con", "y", "o", "que", "vive", "viven", "por", "para",
 }
 
 
 @dataclass(frozen=True)
 class ParsedNaturalQuery:
-    """Structured result of the natural-language translator."""
+    """Resultado del traductor de lenguaje natural."""
 
     size_tags: list[str]
     habitat_tags: list[str]
@@ -92,50 +110,94 @@ class ParsedNaturalQuery:
 
     @property
     def has_structured_filters(self) -> bool:
-        """Return True when at least one structured filter is detected."""
+        """Indica si se detectó al menos un filtro estructurado."""
         return bool(self.size_tags or self.habitat_tags or self.color_tags or self.group_tags)
+
+    @property
+    def status_message(self) -> str:
+        """Mensaje estable para la UI.
+
+        Se deja como propiedad para que app.py pueda mostrar feedback sin depender
+        de atributos temporales. Esto corrige el AttributeError visto en Streamlit.
+        """
+        if not self.has_structured_filters:
+            return "No se detectaron filtros estructurados. Se usa búsqueda por nombre/texto."
+        detected = []
+        if self.size_tags:
+            detected.append(f"tamaño: {', '.join(self.size_tags)}")
+        if self.habitat_tags:
+            detected.append(f"hábitat: {', '.join(self.habitat_tags)}")
+        if self.color_tags:
+            detected.append(f"color: {', '.join(self.color_tags)}")
+        if self.group_tags:
+            detected.append(f"grupo: {', '.join(self.group_tags)}")
+        return "Filtros detectados: " + " · ".join(detected)
 
 
 def parse_natural_language_query(query_text: str) -> ParsedNaturalQuery:
-    """Extract structured filters and remove those words from fallback text."""
+    """Extrae filtros estructurados de la frase del usuario.
+
+    Punto importante de arquitectura: las palabras ya usadas como filtros
+    estructurados no pueden reutilizarse como búsqueda textual secundaria.
+    Ejemplo: "animal grande de la sabana" debe producir filtros
+    ``animal + large + savanna`` y ``remaining_text == ""``. Así evitamos que
+    "grande" encuentre por accidente una especie llamada "Rana Grande".
+    """
     normalized_query = normalize_text(query_text)
     size_tags = detect_tags(normalized_query, SIZE_KEYWORDS)
     habitat_tags = detect_tags(normalized_query, HABITAT_KEYWORDS)
     color_tags = detect_tags(normalized_query, COLOR_KEYWORDS)
     group_tags = detect_tags(normalized_query, GROUP_KEYWORDS)
 
-    consumed_words = build_consumed_words(size_tags, SIZE_KEYWORDS)
-    consumed_words |= build_consumed_words(habitat_tags, HABITAT_KEYWORDS)
-    consumed_words |= build_consumed_words(color_tags, COLOR_KEYWORDS)
-    consumed_words |= build_consumed_words(group_tags, GROUP_KEYWORDS)
-    consumed_words |= STOPWORDS
-
-    remaining_tokens = [
-        token for token in normalized_query.split()
-        if token and token not in consumed_words
-    ]
-
     return ParsedNaturalQuery(
         size_tags=size_tags,
         habitat_tags=habitat_tags,
         color_tags=color_tags,
         group_tags=group_tags,
-        remaining_text=" ".join(remaining_tokens),
+        remaining_text=build_remaining_text(
+            normalized_query=normalized_query,
+            detected_tags_by_vocabulary=[
+                (SIZE_KEYWORDS, size_tags),
+                (HABITAT_KEYWORDS, habitat_tags),
+                (COLOR_KEYWORDS, color_tags),
+                (GROUP_KEYWORDS, group_tags),
+            ],
+        ),
     )
 
 
-def build_consumed_words(tags: list[str], vocabulary: dict[str, list[str]]) -> set[str]:
-    """Return words that were used to detect structured tags."""
-    words: set[str] = set()
-    for tag in tags:
-        words.add(normalize_text(tag))
-        for keyword in vocabulary.get(tag, []):
-            words.update(normalize_text(keyword).split())
-    return words
+def build_remaining_text(
+    *,
+    normalized_query: str,
+    detected_tags_by_vocabulary: list[tuple[dict[str, list[str]], list[str]]],
+) -> str:
+    """Elimina del fallback textual las palabras ya convertidas en filtros.
+
+    Mantiene nombres científicos o términos específicos que no forman parte del
+    vocabulario estructurado, por ejemplo "panthera leo grande" ->
+    "panthera leo".
+    """
+    remaining = f" {normalized_query} "
+
+    for vocabulary, detected_tags in detected_tags_by_vocabulary:
+        for tag in detected_tags:
+            for keyword in vocabulary.get(tag, []):
+                normalized_keyword = normalize_text(keyword).strip()
+                if not normalized_keyword:
+                    continue
+                pattern = rf"(?<!\w){re.escape(normalized_keyword)}(?!\w)"
+                remaining = re.sub(pattern, " ", remaining)
+
+    tokens = [
+        token
+        for token in remaining.split()
+        if token and token not in REMAINING_TEXT_STOPWORDS
+    ]
+    return " ".join(tokens)
 
 
 def detect_tags(normalized_query: str, vocabulary: dict[str, list[str]]) -> list[str]:
-    """Detect canonical tags by controlled vocabulary."""
+    """Detecta tags por vocabulario controlado."""
     detected: list[str] = []
     query_tokens = set(normalized_query.split())
     for tag, keywords in vocabulary.items():
@@ -152,96 +214,128 @@ def apply_natural_language_filters(
     df: pd.DataFrame,
     query_text: str,
 ) -> tuple[pd.DataFrame, ParsedNaturalQuery, bool]:
-    """Apply strict df.loc filters from the natural-language phrase.
+    """Aplica filtros con df.loc según la frase natural.
 
-    Returns ``(result_df, parsed_query, fallback_used)``. When strict AND filters
-    return nothing, the function returns a soft structured candidate set instead
-    of the whole dataframe. This keeps the demo useful without letting generic
-    words such as "grande" accidentally rank unrelated names.
+    El tercer valor indica si se usó relajación controlada o si no hubo resultados
+    exactos. Importante: si hay filtros estructurados, nunca devolvemos todo el
+    dataset como fallback, porque eso genera resultados contradictorios.
     """
     parsed_query = parse_natural_language_query(query_text)
-    if df.empty or not parsed_query.has_structured_filters:
+    if df.empty:
+        return df.copy(), parsed_query, False
+    if not parsed_query.has_structured_filters:
         return df.copy(), parsed_query, False
 
-    strict_mask = build_strict_structured_mask(df, parsed_query)
-    strict_df = df.loc[strict_mask].copy()
-    if not strict_df.empty:
-        strict_df["structured_match_score"] = 1.0
-        return strict_df, parsed_query, False
+    exact_mask = build_structured_mask(
+        df=df,
+        parsed_query=parsed_query,
+        include_size=True,
+        include_color=True,
+        broaden_habitat=False,
+    )
+    exact_df = df.loc[exact_mask].copy()
+    if not exact_df.empty:
+        return exact_df, parsed_query, False
 
-    soft_df = build_soft_structured_candidates(df, parsed_query)
-    if soft_df.empty:
-        return df.iloc[0:0].copy(), parsed_query, True
-    return soft_df, parsed_query, True
+    # Relajación controlada: mantener grupo y hábitat; relajar tamaño/color,
+    # porque suelen ser inferencias más débiles en el dataset.
+    relaxed_mask = build_structured_mask(
+        df=df,
+        parsed_query=parsed_query,
+        include_size=False,
+        include_color=False,
+        broaden_habitat=True,
+    )
+    relaxed_df = df.loc[relaxed_mask].copy()
+    if not relaxed_df.empty:
+        return relaxed_df, parsed_query, True
+
+    return df.iloc[0:0].copy(), parsed_query, True
 
 
-def build_strict_structured_mask(df: pd.DataFrame, parsed_query: ParsedNaturalQuery) -> pd.Series:
-    """Build the original AND mask for exact df.loc filtering."""
-    mask = pd.Series(True, index=df.index)
-    if parsed_query.size_tags and "size_tag" in df.columns:
-        mask &= build_contains_mask(df["size_tag"], parsed_query.size_tags)
-    if parsed_query.habitat_tags and "habitat_tag" in df.columns:
-        mask &= build_contains_mask(df["habitat_tag"], parsed_query.habitat_tags)
-    if parsed_query.color_tags and "color_tag" in df.columns:
-        mask &= build_contains_mask(df["color_tag"], parsed_query.color_tags)
-    if parsed_query.group_tags:
-        mask &= build_group_mask(df, parsed_query.group_tags)
-    return mask
-
-
-def build_soft_structured_candidates(
+def build_structured_mask(
     df: pd.DataFrame,
     parsed_query: ParsedNaturalQuery,
     *,
-    minimum_score: float = 1.0,
-) -> pd.DataFrame:
-    """Return partial structured matches with an explicit score.
+    include_size: bool,
+    include_color: bool,
+    broaden_habitat: bool,
+) -> pd.Series:
+    """Construye una máscara estructurada estable."""
+    mask = pd.Series(True, index=df.index)
 
-    Weights prioritize more specific signals over the very broad "animal" group:
-    habitat > size/color > specific biological group > generic animalia.
-    """
-    score = pd.Series(0.0, index=df.index)
+    if include_size and parsed_query.size_tags:
+        mask &= build_multi_column_contains_mask(
+            df,
+            columns=["size_tag", "tags_de_busqueda"],
+            tags=parsed_query.size_tags,
+        )
 
-    if parsed_query.habitat_tags and "habitat_tag" in df.columns:
-        score += build_contains_mask(df["habitat_tag"], parsed_query.habitat_tags).astype(float) * 1.6
-    if parsed_query.size_tags and "size_tag" in df.columns:
-        score += build_contains_mask(df["size_tag"], parsed_query.size_tags).astype(float) * 1.2
-    if parsed_query.color_tags and "color_tag" in df.columns:
-        score += build_contains_mask(df["color_tag"], parsed_query.color_tags).astype(float) * 1.2
+    if parsed_query.habitat_tags:
+        habitat_terms: list[str] = []
+        for tag in parsed_query.habitat_tags:
+            if broaden_habitat:
+                habitat_terms.extend(HABITAT_RELATED_TERMS.get(tag, [tag]))
+            else:
+                habitat_terms.append(tag)
+        mask &= build_multi_column_contains_mask(
+            df,
+            columns=["habitat_tag", "tags_de_busqueda", "search_document"],
+            tags=habitat_terms,
+        )
+
+    if include_color and parsed_query.color_tags:
+        mask &= build_multi_column_contains_mask(
+            df,
+            columns=["color_tag", "tags_de_busqueda"],
+            tags=parsed_query.color_tags,
+        )
+
     if parsed_query.group_tags:
-        group_weight = 0.4 if parsed_query.group_tags == ["animal"] else 1.1
-        score += build_group_mask(df, parsed_query.group_tags).astype(float) * group_weight
+        mask &= build_group_mask(df, parsed_query.group_tags)
 
-    result = df.loc[score >= minimum_score].copy()
-    if result.empty:
-        return result
-    result["structured_match_score"] = score.loc[result.index]
-    sort_columns = ["structured_match_score"]
-    ascending = [False]
-    if "observations" in result.columns:
-        sort_columns.append("observations")
-        ascending.append(False)
-    return result.sort_values(sort_columns, ascending=ascending)
+    return mask
+
+
+def build_group_mask(df: pd.DataFrame, group_tags: list[str]) -> pd.Series:
+    """Construye máscara para grupos sin usar common names multilingües."""
+    group_mask = pd.Series(False, index=df.index)
+    taxon_columns = [
+        column
+        for column in ["kingdom", "taxon_class", "taxon_order", "family", "phylum", "search_document"]
+        if column in df.columns
+    ]
+    if not taxon_columns:
+        return pd.Series(True, index=df.index)
+
+    for group_tag in group_tags:
+        expected_terms = GROUP_TO_TAXON_TEXT.get(group_tag, [group_tag])
+        for column in taxon_columns:
+            group_mask |= build_contains_mask(df[column], expected_terms)
+    return group_mask
+
+
+def build_multi_column_contains_mask(
+    df: pd.DataFrame,
+    columns: list[str],
+    tags: list[str],
+) -> pd.Series:
+    """Construye una máscara OR buscando tags en varias columnas existentes."""
+    existing_columns = [column for column in columns if column in df.columns]
+    if not existing_columns:
+        return pd.Series(True, index=df.index)
+
+    mask = pd.Series(False, index=df.index)
+    for column in existing_columns:
+        mask |= build_contains_mask(df[column], tags)
+    return mask
 
 
 def build_contains_mask(series: pd.Series, tags: list[str]) -> pd.Series:
-    """Build an OR mask for a list of canonical tags."""
+    """Construye máscara OR para una lista de tags."""
     normalized_series = series.fillna("").astype(str).apply(normalize_text)
     mask = pd.Series(False, index=series.index)
     for tag in tags:
         normalized_tag = normalize_text(tag)
         mask |= normalized_series.str.contains(normalized_tag, regex=False, na=False)
     return mask
-
-
-def build_group_mask(df: pd.DataFrame, group_tags: list[str]) -> pd.Series:
-    """Build group mask from taxonomy columns, not from noisy common names."""
-    group_mask = pd.Series(False, index=df.index)
-    existing_columns = [column for column in GROUP_FILTER_COLUMNS if column in df.columns]
-    if not existing_columns:
-        return pd.Series(True, index=df.index)
-    for group_tag in group_tags:
-        taxon_terms = GROUP_TO_TAXON_TERMS.get(group_tag, [group_tag])
-        for column in existing_columns:
-            group_mask |= build_contains_mask(df[column], taxon_terms)
-    return group_mask

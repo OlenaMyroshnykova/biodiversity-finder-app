@@ -1,4 +1,5 @@
 """Streamlit application for Biodiversity Finder."""
+
 from __future__ import annotations
 
 import streamlit as st
@@ -30,7 +31,7 @@ from src.ui import (
 
 def main() -> None:
     """Run the app."""
-    st.set_page_config(page_title="Biodiversity Finder", page_icon="🌿", layout="wide")
+    st.set_page_config(page_title="Biodiversity Finder", page_icon="", layout="wide")
     apply_styles()
     render_header()
 
@@ -55,37 +56,39 @@ def main() -> None:
     )
 
     if parsed_query.has_structured_filters:
+        detected = []
+        if parsed_query.size_tags:
+            detected.append(f"tamaño: {', '.join(parsed_query.size_tags)}")
+        if parsed_query.habitat_tags:
+            detected.append(f"hábitat: {', '.join(parsed_query.habitat_tags)}")
+        if parsed_query.color_tags:
+            detected.append(f"color: {', '.join(parsed_query.color_tags)}")
+        if parsed_query.group_tags:
+            detected.append(f"grupo: {', '.join(parsed_query.group_tags)}")
+
+        message = "Filtros detectados: " + " · ".join(detected)
+        if parsed_query.status_message:
+            message += ". " + parsed_query.status_message
+
         if nl_fallback:
-            st.warning(
-                "Los filtros estructurados detectados no encontraron resultados. "
-                "Mostrando búsqueda secundaria por nombre/texto."
-            )
+            st.warning(message)
         else:
-            detected = []
-            if parsed_query.size_tags:
-                detected.append(f"tamaño: {', '.join(parsed_query.size_tags)}")
-            if parsed_query.habitat_tags:
-                detected.append(f"hábitat: {', '.join(parsed_query.habitat_tags)}")
-            if parsed_query.color_tags:
-                detected.append(f"color: {', '.join(parsed_query.color_tags)}")
-            if parsed_query.group_tags:
-                detected.append(f"grupo: {', '.join(parsed_query.group_tags)}")
-            st.info(
-                "Filtros detectados: "
-                + " · ".join(detected)
-                + ". Aplicando df.loc sobre etiquetas estructuradas."
-            )
+            st.info(message + ". Aplicando df.loc sobre etiquetas estructuradas.")
+
+    # Si había filtros estructurados, no reutilizamos palabras como grande/sabana para
+    # hacer ranking textual dentro del subconjunto. Así evitamos que un nombre común
+    # como "Rana Grande" suba por encima de la intención del usuario.
+    search_query = parsed_query.remaining_text if parsed_query.has_structured_filters else query_text
 
     result_df = semantic_search_encyclopedia(
         encyclopedia_df=vibe_filtered_df,
-        query_text=query_text,
+        query_text=search_query,
         top_n=max_results,
     )
 
     render_metrics(result_df, encyclopedia_df, metrics)
 
     tabs = st.tabs(["Resultados", "Gráficos", "✨ Plotly EDA", "Datos"])
-
     with tabs[0]:
         st.caption(
             "La app permite elegir entre artifact completo online, artifact ligero online "
