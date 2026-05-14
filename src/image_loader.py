@@ -314,7 +314,6 @@ def search_wikidata_p18_image(search_name: str) -> str | None:
     return None
 
 
-@lru_cache(maxsize=4096)
 def search_wikimedia_file(search_name: str) -> str | None:
     """Search Wikimedia Commons files for a representative image."""
     clean_name = canonicalize_scientific_name(search_name)
