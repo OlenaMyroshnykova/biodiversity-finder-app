@@ -1,97 +1,65 @@
-"""Query expansion for fallback name search.
+"""Expansión genérica de consultas.
 
-This module keeps two concepts separate:
-- ``GENERIC_CATEGORY_SYNONYMS``: broad categories only. Tests use this dictionary
-  to ensure we do not hide species-specific hacks inside generic vocabulary.
-- ``EXACT_NAME_SYNONYMS``: small ES/EN helper aliases for common-name fallback.
-
-Structured vibe-search still lives in ``natural_language_query.py`` and uses
-``df.loc`` over size/habitat/color/group tags. This file only improves fallback
-search when the user writes a concrete common name such as ``lion`` or
-``cocodrilo``.
+Este módulo NO contiene hacks por especie. Las especies concretas deben aparecer
+por sus nombres comunes en `vernacular_names` y `search_document`, generados en
+training. Aquí solo viven conceptos generales ES/EN usados en frases humanas.
 """
 from __future__ import annotations
 
 from src.search_components.normalizer import normalize_text
 
-GENERIC_CATEGORY_SYNONYMS: dict[str, str] = {
-    # Project scope: Spanish + English only for demo promises.
+GENERIC_QUERY_SYNONYMS: dict[str, str] = {
     "animal": "animalia fauna especie organismo",
     "animales": "animalia fauna especies organismos",
+    "bicho": "animalia fauna insecto pequeno pequeño",
+    "bichos": "animalia fauna insectos pequenos pequeños",
     "planta": "plantae flora vegetal",
     "plantas": "plantae flora vegetales",
     "plant": "plantae flora vegetal",
     "plants": "plantae flora vegetales",
-    "ave": "aves bird pajaro pajaro",
-    "aves": "aves birds pajaros pajaros",
-    "bird": "aves ave pajaro pajaro",
-    "birds": "aves pajaros pajaros",
-    "mamifero": "mammalia mamifero mammal",
-    "mamífero": "mammalia mamifero mammal",
-    "mammal": "mammalia mamifero mamifero",
-    "insecto": "insecta insect",
-    "insect": "insecta insecto",
+    "ave": "aves bird pajaro pájaro plumas",
+    "aves": "aves birds pajaros pájaros plumas",
+    "bird": "aves ave pajaro pájaro feathers",
+    "birds": "aves pajaros pájaros feathers",
+    "mamifero": "mammalia mammal mamifero",
+    "mamífero": "mammalia mammal mamifero",
+    "mammal": "mammalia mamifero mamífero",
+    "insecto": "insecta insect bicho pequeno pequeño",
+    "insect": "insecta insecto bug small",
     "reptil": "reptilia reptile escamas",
-    "reptiles": "reptilia reptiles escamas",
-    "anfibio": "amphibia amphibian",
-    "amphibian": "amphibia anfibio",
-    "pez": "actinopterygii fish",
-    "peces": "actinopterygii fish",
-    "fish": "actinopterygii pez peces",
-    "flor": "flower flowering plantae",
-    "flower": "flor flowering plantae",
-    "agua": "water aquatic acuatico acuatico",
-    "water": "agua aquatic acuatico acuatico",
-}
-
-# Concrete-name fallback aliases. This is intentionally NOT the generic synonym
-# dictionary, so tests can verify that generic categories remain generic.
-EXACT_NAME_SYNONYMS: dict[str, str] = {
-    "lion": "panthera leo leon",
-    "leon": "panthera leo lion",
-    "león": "panthera leo lion",
-    "cocodrilo": "crocodylia crocodylus crocodile reptilia caiman",
-    "cocodrilos": "crocodylia crocodiles reptilia",
-    "crocodile": "crocodylia crocodylus cocodrilo reptilia caiman",
-    "crocodiles": "crocodylia crocodiles reptilia",
-    "caiman": "crocodylia crocodilian reptilia",
-    "caimán": "crocodylia crocodilian reptilia",
-    "shark": "chondrichthyes selachimorpha tiburon",
-    "tiburon": "chondrichthyes selachimorpha shark",
-    "tiburón": "chondrichthyes selachimorpha shark",
-    "snake": "serpentes reptilia serpiente",
-    "serpiente": "serpentes reptilia snake",
-    "lizard": "reptilia lacertilia lagarto",
-    "lagarto": "reptilia lacertilia lizard",
-    "spider": "arachnida araneae arana",
-    "araña": "arachnida araneae spider",
-    "arana": "arachnida araneae spider",
-    "eagle": "accipitridae aves rapaz aguila",
-    "aguila": "accipitridae aves rapaz eagle",
-    "águila": "accipitridae aves rapaz eagle",
-    "frog": "amphibia anura rana anfibio",
-    "rana": "amphibia anura frog amphibian",
+    "reptile": "reptilia reptil scales",
+    "anfibio": "amphibia amphibian humedal agua",
+    "amphibian": "amphibia anfibio wetland water",
+    "pez": "actinopterygii chondrichthyes fish agua mar rio río",
+    "fish": "actinopterygii chondrichthyes pez water sea river",
+    "flor": "flower flowering plantae colorido",
+    "flower": "flor flowering plantae colorful",
+    "desierto": "desert arid arido árido",
+    "desert": "desierto arid arido árido",
+    "bosque": "forest woodland",
+    "forest": "bosque woodland",
+    "agua": "water aquatic acuatico acuático humedal rio río lago",
+    "water": "agua aquatic acuatico acuático wetland river lake",
+    "rosa": "pink rosado",
+    "pink": "rosa rosado",
+    "azul": "blue",
+    "blue": "azul",
+    "verde": "green",
+    "green": "verde",
+    "pequeno": "small tiny little pequeño",
+    "pequeño": "small tiny little pequeno",
+    "small": "pequeno pequeño tiny little",
+    "grande": "large big gigante",
+    "large": "grande big gigante",
 }
 
 
 def expand_query(query_text: str) -> str:
-    """Expand a user query for fallback TF-IDF/name search.
-
-    The expansion is intentionally ES/EN only. Cyrillic or other-language common
-    names are still searchable when they already exist in ``vernacular_names``;
-    we simply do not advertise or inject those languages as demo vocabulary.
-    """
+    """Expande solo vocabulario conceptual, no especies concretas."""
     normalized_query = normalize_text(query_text)
-    words = normalized_query.split()
     expansions = [normalized_query]
-
-    for word in words:
-        generic_text = GENERIC_CATEGORY_SYNONYMS.get(word)
-        if generic_text:
-            expansions.append(generic_text)
-
-        exact_text = EXACT_NAME_SYNONYMS.get(word)
-        if exact_text:
-            expansions.append(exact_text)
-
+    for word in normalized_query.split():
+        expansion = GENERIC_QUERY_SYNONYMS.get(word)
+        if expansion:
+            expansions.append(expansion)
     return " ".join(part for part in expansions if part).strip()
