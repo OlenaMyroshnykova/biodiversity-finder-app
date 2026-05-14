@@ -1,4 +1,5 @@
 """Species cards for the visual encyclopedia."""
+
 from __future__ import annotations
 
 import html
@@ -28,6 +29,8 @@ ARTIFACT_IMAGE_COLUMNS = [
     "gbif_image_url",
 ]
 
+_TECHNICAL_EMPTY_VALUES = {"", "unknown", "none", "nan", "n/a", "no_data"}
+
 
 def _allow_remote_image_lookup() -> bool:
     """Remote lookup is enabled by default for the deadline demo."""
@@ -56,13 +59,14 @@ def _cached_find_species_image_url(
 ) -> str | None:
     """Find a representative image with cache.
 
-    The UI uses the canonical scientific name and Spanish/English common names
-    when available. Wikipedia/Wikimedia is preferred over GBIF occurrence photos
-    because GBIF can return habitat shots where the animal is barely visible.
+    The UI uses the canonical scientific name and common names when available.
+    Wikipedia/Wikimedia is preferred over GBIF occurrence photos because GBIF can
+    return habitat shots where the animal is barely visible.
     """
     clean_name = str(primary_name or "").strip()
     if not clean_name:
         return None
+
     return find_species_image_url(
         clean_name,
         common_names=str(common_names or ""),
@@ -133,9 +137,9 @@ def get_card_image_url(
     )
     common_names = str(row.get("vernacular_names", "") or "")
     candidate_url = _cached_find_species_image_url(primary_name, common_names)
+
     if candidate_url and candidate_url not in used_image_urls and is_valid_image_url(candidate_url):
         return candidate_url
-
     return None
 
 
@@ -166,10 +170,12 @@ def render_fixed_species_image(image_url: str, caption: str) -> None:
     safe_caption = html.escape(caption)
     st.markdown(
         f"""
-        <figure class="species-image-frame">
-            <img src="{safe_url}" alt="{safe_caption}" loading="lazy" referrerpolicy="no-referrer" />
-            <figcaption>{safe_caption}</figcaption>
-        </figure>
+        <div class="species-image-card">
+            <div class="species-image-frame">
+                <img src="{safe_url}" alt="{safe_caption}" loading="lazy" />
+            </div>
+            <div class="species-image-caption">{safe_caption}</div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -179,9 +185,11 @@ def render_species_image_placeholder() -> None:
     """Render placeholder when no reliable image exists."""
     st.markdown(
         """
-        <div class="species-image-placeholder">
-            <span>Imagen no disponible</span>
-            <small>Se mostrará cuando exista una URL fiable.</small>
+        <div class="species-image-card species-image-placeholder">
+            <div class="species-image-frame species-image-frame-empty">
+                <span>Imagen no disponible</span>
+            </div>
+            <div class="species-image-caption">Se mostrará cuando exista una URL fiable.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -189,7 +197,13 @@ def render_species_image_placeholder() -> None:
 
 
 def render_species_card_content(position: int, row: pd.Series) -> None:
-    """Render textual content for one card."""
+    """Render textual content for one card.
+
+    The public card intentionally avoids raw internal columns like
+    ``habitat_tag``, ``size_tag`` and ``most_common_season``. Those columns are
+    useful for search, but they are not official biological facts and looked
+    confusing in the demo UI.
+    """
     title_column, metric_column = st.columns([3, 1])
 
     with title_column:
@@ -197,6 +211,7 @@ def render_species_card_content(position: int, row: pd.Series) -> None:
         common_names = format_common_names(row.get("vernacular_names", ""))
         if common_names:
             st.caption(f"**Nombres comunes:** {common_names}")
+
         taxonomy_line = (
             f"{row.get('kingdom', 'Unknown')} · "
             f"{row.get('taxon_class', 'Unknown')} · "
@@ -206,7 +221,7 @@ def render_species_card_content(position: int, row: pd.Series) -> None:
         st.caption(taxonomy_line)
 
     with metric_column:
-        st.metric("Score", format_score(row.get("search_score", 0.0)))
+        st.metric("Score", format_score(get_display_score(row)))
         st.metric("Obs.", format_integer(row.get("observations", 0)))
 
     render_conservation_badge(row)
@@ -219,19 +234,131 @@ def render_species_card_content(position: int, row: pd.Series) -> None:
         st.markdown(f"**Periodo:** {row.get('first_year', 'N/A')}–{row.get('last_year', 'N/A')}")
     with info_column_2:
         st.markdown(f"**Registro:** {row.get('most_common_basis', 'Unknown')}")
-        st.markdown(f"**Estación:** {row.get('most_common_season', 'Unknown')}")
-        if "habitat_tag" in row:
-            st.markdown(f"**Hábitat tag:** {row.get('habitat_tag', 'Unknown')}")
+        st.markdown(f"**Clase:** {row.get('taxon_class', 'Unknown')}")
     with info_column_3:
         latitude = format_coordinate(row.get("avg_latitude"))
         longitude = format_coordinate(row.get("avg_longitude"))
         st.markdown(f"**Centro geográfico:** {latitude}, {longitude}")
-        if "size_tag" in row:
-            st.markdown(f"**Tamaño tag:** {row.get('size_tag', 'Unknown')}")
+        st.markdown(f"**Familia:** {row.get('family', 'Unknown')}")
+
+    search_signal_summary = build_search_signal_summary(row)
+    if search_signal_summary:
+        with st.expander("Detalles técnicos del artifact", expanded=False):
+            st.caption(
+                "Estas señales se usan para la búsqueda educativa. No son una ficha "
+                "taxonómica oficial ni sustituyen fuentes científicas."
+            )
+            st.write(search_signal_summary)
 
     conservation_note = str(row.get("conservation_note", "") or "").strip()
     if conservation_note:
         st.caption(conservation_note)
+
+
+def get_display_score(row: pd.Series) -> float:
+    """Return the best score available for a card.
+
+    Structured searches create ``structured_match_score`` while text searches
+    create ``search_score``. Showing only ``search_score`` made good structured
+    results appear as ``0.000``.
+    """
+    for column in ("search_score", "structured_match_score", "score"):
+        value = row.get(column, None)
+        try:
+            numeric_value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric_value > 0:
+            return numeric_value
+    return 0.0
+
+
+def build_search_signal_summary(row: pd.Series) -> str:
+    """Build a compact technical summary for the collapsed diagnostics expander."""
+    parts: list[str] = []
+    size_label = humanize_tag_value(row.get("size_tag", ""), kind="size")
+    habitat_label = humanize_tag_value(row.get("habitat_tag", ""), kind="habitat")
+    color_label = humanize_tag_value(row.get("color_tag", ""), kind="color")
+
+    if size_label:
+        parts.append(f"tamaño: {size_label}")
+    if habitat_label:
+        parts.append(f"hábitat: {habitat_label}")
+    if color_label:
+        parts.append(f"color: {color_label}")
+
+    return " · ".join(parts)
+
+
+def humanize_tag_value(value: object, kind: str = "generic") -> str:
+    """Convert raw search tags into short Spanish labels.
+
+    We intentionally avoid returning long raw strings like
+    ``forest mountain terrestrial bosque montana`` in the public card.
+    """
+    raw_value = str(value or "").strip().lower()
+    if raw_value in _TECHNICAL_EMPTY_VALUES:
+        return ""
+
+    token_text = raw_value.replace("|", " ").replace(",", " ").replace(";", " ")
+    tokens = {token.strip() for token in token_text.split() if token.strip()}
+
+    if kind == "size":
+        ordered = [
+            ("large", "grande"),
+            ("grande", "grande"),
+            ("medium", "mediano"),
+            ("mediano", "mediano"),
+            ("small", "pequeño"),
+            ("pequeno", "pequeño"),
+            ("pequeño", "pequeño"),
+            ("tiny", "muy pequeño"),
+        ]
+    elif kind == "habitat":
+        ordered = [
+            ("savanna", "sabana"),
+            ("sabana", "sabana"),
+            ("grassland", "pradera"),
+            ("forest", "bosque"),
+            ("bosque", "bosque"),
+            ("wetland", "humedal"),
+            ("humedal", "humedal"),
+            ("desert", "desierto"),
+            ("desierto", "desierto"),
+            ("marine", "marino"),
+            ("ocean", "océano"),
+            ("mountain", "montaña"),
+            ("montana", "montaña"),
+            ("montaña", "montaña"),
+            ("terrestrial", "terrestre"),
+        ]
+    elif kind == "color":
+        ordered = [
+            ("brown", "marrón"),
+            ("marron", "marrón"),
+            ("white", "blanco"),
+            ("black", "negro"),
+            ("red", "rojo"),
+            ("pink", "rosa"),
+            ("rosa", "rosa"),
+            ("blue", "azul"),
+            ("green", "verde"),
+            ("yellow", "amarillo"),
+            ("colorful", "colorido"),
+        ]
+    else:
+        ordered = []
+
+    labels: list[str] = []
+    seen: set[str] = set()
+    for token, label in ordered:
+        if token in tokens and label not in seen:
+            seen.add(label)
+            labels.append(label)
+        if len(labels) >= 3:
+            break
+
+    return ", ".join(labels)
 
 
 def is_row_threatened(row: pd.Series) -> bool:
@@ -293,7 +420,8 @@ def render_data_quality_note(row: pd.Series) -> None:
     else:
         conservation_text = "Si no hay coincidencia IUCN, se muestra Sin datos IUCN; no inventamos LC."
     st.caption(
-        "Las etiquetas de hábitat, tamaño y color son inferencias educativas para búsqueda. "
+        "Las señales de hábitat, tamaño y color son ayudas educativas para búsqueda, "
+        "no descripciones biológicas oficiales. "
         f"{conservation_text}"
     )
 

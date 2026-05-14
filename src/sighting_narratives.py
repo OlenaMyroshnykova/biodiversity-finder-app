@@ -17,20 +17,6 @@ _CLASS_INTRO = {
     "Fungi": "hongo",
 }
 
-_HABITAT_PHRASE = {
-    "polar": "entornos polares",
-    "wetland": "humedales, ríos y zonas costeras",
-    "forest": "bosques y selvas",
-    "desert": "desiertos y zonas semiáridas",
-    "ocean": "ecosistemas oceánicos",
-    "marine": "ecosistemas marinos",
-    "savanna": "sabanas y praderas",
-    "grassland": "praderas abiertas",
-    "mountain": "montañas y altiplanos",
-    "meadow": "praderas y jardines",
-    "terrestrial": "entornos terrestres variados",
-}
-
 _CONSERVATION_PHRASE = {
     "LC": "clasificada como especie de Preocupación Menor",
     "NT": "considerada Casi Amenazada, lo que requiere seguimiento",
@@ -44,20 +30,55 @@ _CONSERVATION_PHRASE = {
     "NO_DATA": "sin datos IUCN disponibles en esta ejecución",
 }
 
+_SIZE_PHRASES = [
+    ("large", "de tamaño grande"),
+    ("grande", "de tamaño grande"),
+    ("small", "de tamaño pequeño"),
+    ("pequeño", "de tamaño pequeño"),
+    ("pequeno", "de tamaño pequeño"),
+    ("tiny", "de tamaño muy pequeño"),
+    ("medium", "de tamaño medio"),
+    ("mediano", "de tamaño medio"),
+]
+
+_COLOR_LABELS = [
+    ("brown", "marrón"),
+    ("marron", "marrón"),
+    ("white", "blanco"),
+    ("black", "negro"),
+    ("red", "rojo"),
+    ("pink", "rosa"),
+    ("blue", "azul"),
+    ("green", "verde"),
+    ("yellow", "amarillo"),
+    ("colorful", "colorido"),
+]
+
 
 def build_sighting_narrative(row: pd.Series) -> str:
-    """Genera una ficha narrativa basada únicamente en columnas del DataFrame."""
+    """Genera una ficha narrativa basada únicamente en columnas del DataFrame.
+
+    Important: ``habitat_tag``, ``size_tag`` and ``color_tag`` are search
+    signals generated for the educational vibe-search. They are not official
+    ecological descriptions. The narrative must therefore avoid strong phrases
+    like "associated with forests" when the artifact contains mixed or noisy
+    search tags.
+    """
     scientific_name = str(row.get("scientific_name", "esta especie"))
     common_names = str(row.get("vernacular_names", "") or "").strip()
     taxon_class = str(row.get("taxon_class", "") or "")
     family = str(row.get("family", "familia desconocida"))
-    habitat_tag = str(row.get("habitat_tag", "") or "")
     size_tag = str(row.get("size_tag", "") or "")
     color_tag = str(row.get("color_tag", "") or "")
-    observations = int(row.get("observations", 0) or 0)
+    observations = safe_int(row.get("observations", 0))
     countries_raw = str(row.get("countries", "") or "")
-    conservation_status = str(row.get("iucn_category", row.get("conservation_status", "NO_DATA")) or "NO_DATA").upper().strip()
-    conservation_source = str(row.get("iucn_source", row.get("conservation_source", "No IUCN data")) or "No IUCN data")
+    conservation_status = str(
+        row.get("iucn_category", row.get("conservation_status", "NO_DATA")) or "NO_DATA"
+    ).upper().strip()
+    conservation_source = str(
+        row.get("iucn_source", row.get("conservation_source", "No IUCN data"))
+        or "No IUCN data"
+    )
 
     public_name = scientific_name
     if common_names:
@@ -65,52 +86,77 @@ def build_sighting_narrative(row: pd.Series) -> str:
         if first_name:
             public_name = first_name
 
-    organism_type = _CLASS_INTRO.get(taxon_class, taxon_class.lower() if taxon_class else "especie")
-
-    habitat_phrase = "diversos ecosistemas"
-    for key, phrase in _HABITAT_PHRASE.items():
-        if key in habitat_tag.lower():
-            habitat_phrase = phrase
-            break
-
-    color_sentence = ""
-    if color_tag and "unknown" not in color_tag:
-        color_sentence = f" Su coloración aparece descrita con etiquetas como **{color_tag.split()[0]}**."
-
-    if size_tag and "unknown" not in size_tag:
-        if "large" in size_tag or "grande" in size_tag:
-            size_sentence = "de tamaño grande"
-        elif "small" in size_tag or "pequeño" in size_tag or "tiny" in size_tag:
-            size_sentence = "de tamaño pequeño"
-        else:
-            size_sentence = "de tamaño medio"
-    else:
-        size_sentence = "con tamaño no especificado"
-
-    country_list = [country.strip() for country in countries_raw.split(",") if country.strip()]
-    if len(country_list) > 3:
-        countries_description = f"{', '.join(country_list[:3])} y otros {len(country_list) - 3} países"
-    elif country_list:
-        countries_description = ", ".join(country_list)
-    else:
-        countries_description = "diversas regiones"
-
-    if observations >= 1000:
-        observations_description = f"más de {observations:,} observaciones registradas"
-    elif observations > 0:
-        observations_description = f"{observations} observaciones en el dataset"
-    else:
-        observations_description = "observaciones escasas en el dataset"
-
+    organism_type = _CLASS_INTRO.get(
+        taxon_class,
+        taxon_class.lower() if taxon_class else "especie",
+    )
+    size_sentence = build_size_sentence(size_tag)
+    color_sentence = build_color_sentence(color_tag)
+    countries_description = build_countries_description(countries_raw)
+    observations_description = build_observations_description(observations)
     conservation_phrase = _CONSERVATION_PHRASE.get(
         conservation_status,
         "con estado de conservación pendiente de evaluación",
     )
 
     return (
-        f"**{public_name}** (*{scientific_name}*) es un {organism_type} de la familia **{family}**, "
-        f"asociado a {habitat_phrase}. Es {size_sentence}.{color_sentence} "
-        f"En el dataset cuenta con {observations_description} en {countries_description}. "
+        f"**{public_name}** (*{scientific_name}*) es un {organism_type} de la familia "
+        f"**{family}**. En esta enciclopedia se describe {size_sentence}."
+        f"{color_sentence} "
+        f"El artifact registra {observations_description} en {countries_description}. "
+        "Las señales de hábitat se usan solo para orientar la búsqueda y deben "
+        "leerse junto con el mapa de avistamientos. "
         f"Su estado de conservación figura como {conservation_phrase}. "
         f"Fuente de conservación: **{conservation_source}**."
     )
+
+
+def safe_int(value: object) -> int:
+    """Convert a dataframe value to int without breaking the card."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def build_size_sentence(size_tag: str) -> str:
+    """Build a cautious size sentence from search tags."""
+    normalized = str(size_tag or "").lower()
+    if not normalized or normalized in {"unknown", "nan", "none", "no_data"}:
+        return "con tamaño no especificado"
+
+    for token, phrase in _SIZE_PHRASES:
+        if token in normalized:
+            return phrase
+    return "con tamaño aproximado no clasificado"
+
+
+def build_color_sentence(color_tag: str) -> str:
+    """Build a cautious color sentence from search tags."""
+    normalized = str(color_tag or "").lower()
+    if not normalized or normalized in {"unknown", "nan", "none", "no_data"}:
+        return ""
+
+    for token, label in _COLOR_LABELS:
+        if token in normalized:
+            return f" Su color aparece como señal educativa de búsqueda: **{label}**."
+    return ""
+
+
+def build_countries_description(countries_raw: str) -> str:
+    """Summarize countries without overloading the card."""
+    country_list = [country.strip() for country in str(countries_raw or "").split(",") if country.strip()]
+    if len(country_list) > 3:
+        return f"{', '.join(country_list[:3])} y otros {len(country_list) - 3} países"
+    if country_list:
+        return ", ".join(country_list)
+    return "diversas regiones"
+
+
+def build_observations_description(observations: int) -> str:
+    """Summarize observation count."""
+    if observations >= 1000:
+        return f"más de {observations:,} observaciones"
+    if observations > 0:
+        return f"{observations} observaciones"
+    return "observaciones escasas"
