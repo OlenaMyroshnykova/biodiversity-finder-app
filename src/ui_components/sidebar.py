@@ -1,4 +1,5 @@
 """Sidebar de búsqueda, filtros y selección de modo de datos."""
+
 from __future__ import annotations
 
 import pandas as pd
@@ -7,9 +8,12 @@ import streamlit as st
 from src.offline_loader import (
     ArtifactMode,
     MODE_LABELS,
+    OFFLINE_DATA_DIR,
     describe_artifact_mode,
+    download_offline_artifacts,
     get_default_artifact_mode,
     has_offline_artifacts,
+    missing_offline_files,
 )
 from src.ui_components.config import MODEL_DASHBOARD_URL, SEARCH_MODEL_DESCRIPTION
 
@@ -24,11 +28,42 @@ def get_available_taxon_classes(df: pd.DataFrame) -> list[str]:
 
     scoped_df = df.copy()
     if "kingdom" in scoped_df.columns:
-        scoped_df = scoped_df[scoped_df["kingdom"].fillna("").astype(str).isin(PROJECT_SCOPE_KINGDOMS)]
+        scoped_df = scoped_df[
+            scoped_df["kingdom"].fillna("").astype(str).isin(PROJECT_SCOPE_KINGDOMS)
+        ]
 
     classes = scoped_df["taxon_class"].dropna().astype(str).str.strip()
     classes = classes[classes.ne("")]
     return sorted(classes.unique().tolist())
+
+
+def _render_offline_download_panel() -> None:
+    """Offer an in-app download action when offline files are missing."""
+    if has_offline_artifacts():
+        st.sidebar.success("Artifacts offline disponibles en data/offline.")
+        return
+
+    missing_names = [path.name for path in missing_offline_files()]
+    st.sidebar.warning("Faltan artifacts offline: " + ", ".join(missing_names))
+    st.sidebar.caption(
+        "Se descargarán en la carpeta local del proyecto: "
+        f"{OFFLINE_DATA_DIR.as_posix()}"
+    )
+
+    if st.sidebar.button("Descargar artifacts offline ahora", type="primary"):
+        with st.spinner("Descargando artifacts light desde Hugging Face..."):
+            try:
+                downloaded_paths = download_offline_artifacts()
+            except Exception as exc:  # pragma: no cover - Streamlit-only error branch
+                st.sidebar.error(f"No se pudieron descargar los artifacts: {exc}")
+                return
+
+        st.sidebar.success(
+            "Descarga completada: "
+            + ", ".join(path.name for path in downloaded_paths)
+        )
+        st.cache_data.clear()
+        st.rerun()
 
 
 def render_data_mode_selector() -> ArtifactMode:
@@ -49,14 +84,32 @@ def render_data_mode_selector() -> ArtifactMode:
     )
     st.sidebar.caption(describe_artifact_mode(selected_mode))
 
-    if selected_mode == "offline_light" and not has_offline_artifacts():
-        st.sidebar.warning(
-            "Faltan artifacts offline. Ejecuta: "
-            "python scripts/download_offline_artifacts.py"
-        )
+    if selected_mode == "offline_light":
+        _render_offline_download_panel()
 
     st.sidebar.divider()
     return selected_mode
+
+
+def _render_min_observations_slider(df: pd.DataFrame) -> int:
+    """Render a safe observations slider even when the artifact is empty."""
+    if df.empty or "observations" not in df.columns:
+        st.sidebar.caption(
+            "Filtro por observaciones no disponible hasta cargar un artifact con datos."
+        )
+        return 1
+
+    max_observations = int(max(1, df["observations"].max()))
+    if max_observations <= 1:
+        st.sidebar.caption("Filtro por observaciones no disponible: solo hay valor 1.")
+        return 1
+
+    return st.sidebar.slider(
+        "Mínimo de observaciones en el dataset",
+        min_value=1,
+        max_value=max_observations,
+        value=1,
+    )
 
 
 def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]:
@@ -80,13 +133,7 @@ def render_sidebar_controls(df: pd.DataFrame) -> tuple[str, list[str], int, int]
         default=[],
     )
 
-    max_observations = int(max(1, df["observations"].max())) if "observations" in df.columns and not df.empty else 1
-    min_observations = st.sidebar.slider(
-        "Mínimo de observaciones en el dataset",
-        min_value=1,
-        max_value=max_observations,
-        value=1,
-    )
+    min_observations = _render_min_observations_slider(df)
 
     max_results = st.sidebar.slider(
         "Número máximo de resultados",
