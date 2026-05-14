@@ -18,11 +18,14 @@ DATA_DEFICIENT_CATEGORIES = {"DD"}
 NO_DATA_CATEGORIES = {"NO_DATA", "NE", "N/A", "", "NONE", "NAN"}
 
 ARTIFACT_IMAGE_COLUMNS = [
+    # Prefer curated encyclopedia URLs when the artifact has them.
+    "wikidata_image_url",
+    "wikipedia_image_url",
     "image_url",
     "thumbnail_url",
     "media_url",
+    # GBIF images are useful but often show habitat/traps; keep them last.
     "gbif_image_url",
-    "wikidata_image_url",
 ]
 
 
@@ -47,16 +50,24 @@ def _remote_image_lookup_limit() -> int:
 
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)
-def _cached_find_species_image_url(scientific_name: str) -> str | None:
+def _cached_find_species_image_url(
+    primary_name: str,
+    common_names: str = "",
+) -> str | None:
     """Find a representative image with cache.
 
-    The UI prefers Wikimedia/Wikipedia over GBIF occurrence photos because GBIF
-    photos can be tiny animals hidden in habitat shots.
+    The UI uses the canonical scientific name and Spanish/English common names
+    when available. Wikipedia/Wikimedia is preferred over GBIF occurrence photos
+    because GBIF can return habitat shots where the animal is barely visible.
     """
-    clean_name = str(scientific_name or "").strip()
+    clean_name = str(primary_name or "").strip()
     if not clean_name:
         return None
-    return find_species_image_url(clean_name, prefer_wikimedia=True)
+    return find_species_image_url(
+        clean_name,
+        common_names=str(common_names or ""),
+        prefer_wikimedia=True,
+    )
 
 
 def render_species_cards(
@@ -116,7 +127,12 @@ def get_card_image_url(
     if position > _remote_image_lookup_limit():
         return None
 
-    candidate_url = _cached_find_species_image_url(str(row.get("scientific_name", "")))
+    primary_name = (
+        str(row.get("canonical_scientific_name", "") or "").strip()
+        or str(row.get("scientific_name", "") or "").strip()
+    )
+    common_names = str(row.get("vernacular_names", "") or "")
+    candidate_url = _cached_find_species_image_url(primary_name, common_names)
     if candidate_url and candidate_url not in used_image_urls and is_valid_image_url(candidate_url):
         return candidate_url
 
