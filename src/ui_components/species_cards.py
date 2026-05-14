@@ -42,11 +42,11 @@ def _allow_remote_image_lookup() -> bool:
 
 def _remote_image_lookup_limit() -> int:
     """Maximum number of visible cards allowed to make remote image lookups."""
-    raw_value = os.getenv("REMOTE_IMAGE_LOOKUP_LIMIT", "6").strip()
+    raw_value = os.getenv("REMOTE_IMAGE_LOOKUP_LIMIT", "3").strip()
     try:
         return max(0, int(raw_value))
     except ValueError:
-        return 6
+        return 3
 
 
 @st.cache_data(ttl=60 * 60 * 24, show_spinner=False)

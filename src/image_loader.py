@@ -8,6 +8,7 @@ Deadline-safe strategy:
 """
 from __future__ import annotations
 
+import os
 import re
 from functools import lru_cache
 from typing import Any, Iterable
@@ -23,8 +24,25 @@ WIKIPEDIA_API_TEMPLATE = "https://{lang}.wikipedia.org/w/api.php"
 WIKIPEDIA_SUMMARY_TEMPLATE = "https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}"
 COMMONS_FILEPATH_URL = "https://commons.wikimedia.org/wiki/Special:FilePath/{filename}"
 
-REQUEST_TIMEOUT_SECONDS = 6
+REQUEST_TIMEOUT_SECONDS = float(os.getenv("REMOTE_IMAGE_TIMEOUT_SECONDS", "2.5"))
 WIKIPEDIA_LANGUAGES = ("en", "es")
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _deep_image_lookup_enabled() -> bool:
+    """Whether to use slow fallback providers such as Commons search and GBIF.
+
+    The deadline default is fast mode: Wikipedia summary + Wikidata P18 only.
+    This avoids many network calls per card. Set DEEP_IMAGE_LOOKUP=true only
+    when you have time to wait and want more image coverage.
+    """
+    return _env_bool("DEEP_IMAGE_LOOKUP", False)
 
 BAD_IMAGE_MARKERS = (
     "placeholder",
@@ -95,40 +113,54 @@ def find_species_image_candidates(
     common_names: str = "",
     prefer_wikimedia: bool = False,
 ) -> tuple[str, ...]:
-    """Return image candidates in a controlled order."""
+    """Return image candidates without making the page painfully slow.
+
+    Fast default for the Streamlit app:
+    - try only the most useful names, not every alias;
+    - use Wikipedia summary and Wikidata P18 first;
+    - skip Commons search and GBIF unless DEEP_IMAGE_LOOKUP=true.
+
+    This keeps remote lookup acceptable even when REMOTE_IMAGE_LOOKUP_LIMIT is
+    temporarily raised for the demo.
+    """
     names_to_try = build_image_search_names(scientific_name, common_names)
+    fast_names = names_to_try[:2]  # full/canonical + binomial/common fallback
+    deep_lookup = _deep_image_lookup_enabled()
 
     wikipedia_urls: list[str] = []
     wikidata_urls: list[str] = []
     commons_urls: list[str] = []
     gbif_urls: list[str] = []
 
-    for name in names_to_try:
+    for name in fast_names:
         for language in WIKIPEDIA_LANGUAGES:
             summary_url = fetch_wikipedia_summary_image(name, language)
             if summary_url:
                 wikipedia_urls.append(summary_url)
 
-            page_image_url = search_wikipedia_page_image(name, language)
-            if page_image_url:
-                wikipedia_urls.append(page_image_url)
-
         p18_url = search_wikidata_p18_image(name)
         if p18_url:
             wikidata_urls.append(p18_url)
 
-        commons_url = search_wikimedia_file(name)
-        if commons_url:
-            commons_urls.append(commons_url)
+    if deep_lookup:
+        for name in names_to_try[:3]:
+            for language in WIKIPEDIA_LANGUAGES:
+                page_image_url = search_wikipedia_page_image(name, language)
+                if page_image_url:
+                    wikipedia_urls.append(page_image_url)
 
-    # GBIF is intentionally last for visible cards. It is useful, but often
-    # returns field/habitat shots rather than clean encyclopedia images.
-    for name in names_to_try[:3]:
-        gbif_urls.extend(fetch_gbif_occurrence_images(name))
+            commons_url = search_wikimedia_file(name)
+            if commons_url:
+                commons_urls.append(commons_url)
 
-    usage_key = fetch_gbif_usage_key(scientific_name)
-    if usage_key:
-        gbif_urls.extend(fetch_gbif_occurrence_images_by_taxon_key(usage_key))
+        # GBIF is intentionally last for visible cards. It is useful, but often
+        # returns field/habitat shots rather than clean encyclopedia images.
+        for name in names_to_try[:2]:
+            gbif_urls.extend(fetch_gbif_occurrence_images(name, limit=3))
+
+        usage_key = fetch_gbif_usage_key(scientific_name)
+        if usage_key:
+            gbif_urls.extend(fetch_gbif_occurrence_images_by_taxon_key(usage_key, limit=3))
 
     wikipedia_urls = valid_unique_urls(wikipedia_urls)
     wikidata_urls = valid_unique_urls(wikidata_urls)
@@ -138,24 +170,23 @@ def find_species_image_candidates(
     if prefer_wikimedia:
         return tuple(deduplicate_preserving_order(wikipedia_urls + wikidata_urls + commons_urls + gbif_urls))
 
-    # Backwards-compatible default for older code/tests.
+    # Backwards-compatible default for older code/tests. In fast mode this no
+    # longer forces slow GBIF calls; gbif_urls is empty unless deep lookup is on.
     return tuple(deduplicate_preserving_order(gbif_urls + wikipedia_urls + wikidata_urls + commons_urls))
 
 
 def build_image_search_names(scientific_name: str, common_names: str = "") -> list[str]:
-    """Build image-search names from specific to general.
+    """Build search names from specific to general.
 
-    Keep the full scientific name first for backwards compatibility and tests.
-    The remote lookup functions still canonicalize each query internally, so a
-    value such as ``Gerbillus nanus Blanford, 1875`` is safely searched as
-    ``Gerbillus nanus`` when calling Wikipedia/Wikimedia.
+    Important: use the canonical binomial before the full scientific name with
+    authorship, e.g. ``Gerbillus nanus`` before ``Gerbillus nanus Blanford``.
     """
     cleaned_name = clean_scientific_name(scientific_name)
     canonical_name = canonicalize_scientific_name(cleaned_name)
     binomial_name = build_binomial_name(canonical_name)
     common_name_values = extract_common_name_values(common_names)
 
-    names = [cleaned_name, canonical_name, binomial_name, *common_name_values[:4]]
+    names = [binomial_name, canonical_name, cleaned_name, *common_name_values[:4]]
     return [name for name in deduplicate_preserving_order(names) if len(name) >= 3]
 
 
@@ -280,6 +311,7 @@ def search_wikidata_p18_image(search_name: str) -> str | None:
     return None
 
 
+@lru_cache(maxsize=4096)
 def search_wikimedia_file(search_name: str) -> str | None:
     """Search Wikimedia Commons files for a representative image."""
     clean_name = canonicalize_scientific_name(search_name)
@@ -335,12 +367,6 @@ def search_wikimedia_file(search_name: str) -> str | None:
         if isinstance(candidate, str) and is_valid_image_url(candidate):
             return candidate
     return None
-
-
-# Keep compatibility with the global cache-clear helper. This function is not
-# cached deliberately: tests monkeypatch ``requests.get`` and should not receive
-# stale URLs from previous calls.
-search_wikimedia_file.cache_clear = lambda: None  # type: ignore[attr-defined]
 
 
 @lru_cache(maxsize=4096)
