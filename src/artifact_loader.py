@@ -1,9 +1,11 @@
-"""Carga artifacts desde Hugging Face o desde modo offline local.
+"""Load artifacts from Hugging Face or from local offline files.
 
-Arquitectura correcta:
-- Online/demo: usar artifact completo por defecto.
-- Offline/campo: usar artifact ligero local o remoto solo cuando se pide.
-- La app valida y normaliza el contrato, pero no repara datos con hacks por especie.
+Architecture:
+- Online complete: use the full Hugging Face artifact for maximum search coverage.
+- Online light: use the compressed/light Hugging Face artifact for quick demos.
+- Offline local: use data/offline light artifacts previously downloaded by the app.
+
+The app chooses the mode from the Streamlit sidebar and passes it to these loaders.
 """
 from __future__ import annotations
 
@@ -15,17 +17,21 @@ import pandas as pd
 import streamlit as st
 from huggingface_hub import hf_hub_download
 
-from src.artifact_contract import ARTIFACT_COLUMNS, normalize_artifact_dataframe, validate_artifact_contract
+from src.artifact_contract import (
+    ARTIFACT_COLUMNS,
+    normalize_artifact_dataframe,
+    validate_artifact_contract,
+)
+from src.offline_loader import ArtifactMode, OFFLINE_DATA_DIR, get_default_artifact_mode
 
 REPO_ID = "selenamir/biodiversity-finder-artifacts"
 REPO_TYPE = "dataset"
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OFFLINE_DATA_DIR = PROJECT_ROOT / "data" / "offline"
 
 ENCYCLOPEDIA_LIGHT_FILE = "processed/species_encyclopedia_light.parquet"
 ENCYCLOPEDIA_FULL_FILE = "processed/species_encyclopedia.parquet"
 OCCURRENCE_POINTS_LIGHT_FILE = "processed/species_occurrence_points_light.parquet"
 OCCURRENCE_POINTS_FULL_FILE = "processed/species_occurrence_points.parquet"
+METRICS_FILE = "reports/metrics.json"
 
 OCCURRENCE_POINT_COLUMNS = [
     "scientific_name",
@@ -37,23 +43,20 @@ OCCURRENCE_POINT_COLUMNS = [
 ]
 
 
-def _truthy_env(name: str, default: str = "false") -> bool:
-    return os.getenv(name, default).strip().lower() in {"1", "true", "yes", "y", "on"}
-
-
-def is_offline_mode() -> bool:
-    """Modo offline real: no depende de llamadas remotas para los datos base."""
-    return _truthy_env("OFFLINE_MODE", "false")
-
-
-def use_light_artifacts() -> bool:
-    """Permite forzar artifact ligero para demo lenta, pero no es el valor normal."""
-    return _truthy_env("USE_LIGHT_ARTIFACTS", "false")
+def _resolve_mode(artifact_mode: ArtifactMode | str | None) -> ArtifactMode:
+    if artifact_mode in {"online_full", "online_light", "offline_light"}:
+        return artifact_mode  # type: ignore[return-value]
+    return get_default_artifact_mode()
 
 
 def _download_artifact(filename: str) -> str:
     token = os.getenv("HF_TOKEN") or None
-    return hf_hub_download(repo_id=REPO_ID, repo_type=REPO_TYPE, filename=filename, token=token)
+    return hf_hub_download(
+        repo_id=REPO_ID,
+        repo_type=REPO_TYPE,
+        filename=filename,
+        token=token,
+    )
 
 
 def _read_parquet_selected_columns(file_path: str | Path, expected_columns: list[str]) -> pd.DataFrame:
@@ -72,19 +75,28 @@ def _read_parquet_selected_columns(file_path: str | Path, expected_columns: list
     return df[available_columns].copy() if available_columns else df
 
 
+def _online_filename(mode: ArtifactMode, full_file: str, light_file: str) -> str:
+    return light_file if mode == "online_light" else full_file
+
+
 @st.cache_data(show_spinner="Cargando enciclopedia de especies...")
-def load_encyclopedia() -> pd.DataFrame:
-    """Carga la enciclopedia bajo contrato estable."""
-    if is_offline_mode():
+def load_encyclopedia(artifact_mode: ArtifactMode | str | None = None) -> pd.DataFrame:
+    """Load the encyclopedia according to the selected frontend mode."""
+    mode = _resolve_mode(artifact_mode)
+
+    if mode == "offline_light":
         offline_path = OFFLINE_DATA_DIR / "species_encyclopedia_light.parquet"
         if offline_path.exists():
-            return normalize_artifact_dataframe(_read_parquet_selected_columns(offline_path, ARTIFACT_COLUMNS))
+            df = _read_parquet_selected_columns(offline_path, ARTIFACT_COLUMNS)
+            return normalize_artifact_dataframe(df)
         st.warning(
-            "OFFLINE_MODE está activo, pero no se encontró "
-            "data/offline/species_encyclopedia_light.parquet. Se usará Hugging Face."
+            "Modo offline seleccionado, pero falta "
+            "data/offline/species_encyclopedia_light.parquet. "
+            "Cambia a modo online o ejecuta scripts/download_offline_artifacts.py."
         )
+        return pd.DataFrame(columns=ARTIFACT_COLUMNS)
 
-    filename = ENCYCLOPEDIA_LIGHT_FILE if use_light_artifacts() else ENCYCLOPEDIA_FULL_FILE
+    filename = _online_filename(mode, ENCYCLOPEDIA_FULL_FILE, ENCYCLOPEDIA_LIGHT_FILE)
     try:
         file_path = _download_artifact(filename)
     except Exception:
@@ -102,14 +114,17 @@ def load_encyclopedia() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner="Cargando puntos de avistamiento...")
-def load_occurrence_points() -> pd.DataFrame:
-    """Carga puntos de avistamiento para mapas Folium."""
-    if is_offline_mode():
+def load_occurrence_points(artifact_mode: ArtifactMode | str | None = None) -> pd.DataFrame:
+    """Load occurrence points for Folium maps according to the selected mode."""
+    mode = _resolve_mode(artifact_mode)
+
+    if mode == "offline_light":
         offline_path = OFFLINE_DATA_DIR / "species_occurrence_points_light.parquet"
         if offline_path.exists():
             return _read_parquet_selected_columns(offline_path, OCCURRENCE_POINT_COLUMNS)
+        return pd.DataFrame(columns=OCCURRENCE_POINT_COLUMNS)
 
-    filename = OCCURRENCE_POINTS_LIGHT_FILE if use_light_artifacts() else OCCURRENCE_POINTS_FULL_FILE
+    filename = _online_filename(mode, OCCURRENCE_POINTS_FULL_FILE, OCCURRENCE_POINTS_LIGHT_FILE)
     try:
         file_path = _download_artifact(filename)
         return _read_parquet_selected_columns(file_path, OCCURRENCE_POINT_COLUMNS)
@@ -118,10 +133,19 @@ def load_occurrence_points() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner="Cargando métricas del modelo...")
-def load_metrics() -> dict:
-    """Carga métricas del entrenamiento desde Hugging Face."""
+def load_metrics(artifact_mode: ArtifactMode | str | None = None) -> dict:
+    """Load model metrics from local offline artifacts or Hugging Face."""
+    mode = _resolve_mode(artifact_mode)
+
+    if mode == "offline_light":
+        offline_path = OFFLINE_DATA_DIR / "metrics.json"
+        if offline_path.exists():
+            with open(offline_path, "r", encoding="utf-8") as metrics_file:
+                return json.load(metrics_file)
+        return {"accuracy": None, "note": "Métricas offline no disponibles."}
+
     try:
-        file_path = _download_artifact("reports/metrics.json")
+        file_path = _download_artifact(METRICS_FILE)
         with open(file_path, "r", encoding="utf-8") as metrics_file:
             return json.load(metrics_file)
     except Exception:

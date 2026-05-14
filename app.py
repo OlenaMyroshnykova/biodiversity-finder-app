@@ -1,4 +1,4 @@
-"""Aplicación Streamlit de Biodiversity Finder."""
+"""Streamlit application for Biodiversity Finder."""
 from __future__ import annotations
 
 import streamlit as st
@@ -19,6 +19,7 @@ from src.search import semantic_search_encyclopedia
 from src.ui import (
     apply_basic_filters,
     apply_styles,
+    render_data_mode_selector,
     render_data_table,
     render_header,
     render_metrics,
@@ -28,15 +29,15 @@ from src.ui import (
 
 
 def main() -> None:
-    """Ejecuta la aplicación."""
+    """Run the app."""
     st.set_page_config(page_title="Biodiversity Finder", page_icon="🌿", layout="wide")
-
     apply_styles()
     render_header()
 
-    encyclopedia_df = load_encyclopedia()
-    occurrence_points_df = load_occurrence_points()
-    metrics = load_metrics()
+    artifact_mode = render_data_mode_selector()
+    encyclopedia_df = load_encyclopedia(artifact_mode)
+    occurrence_points_df = load_occurrence_points(artifact_mode)
+    metrics = load_metrics(artifact_mode)
 
     query_text, selected_classes, min_observations, max_results = render_sidebar_controls(
         encyclopedia_df
@@ -87,9 +88,10 @@ def main() -> None:
 
     with tabs[0]:
         st.caption(
-            "La app usa el artifact ligero por defecto para cargar más rápido. "
-            "Cada tarjeta puede abrir un mapa Folium con puntos GBIF. "
-            "El estado de conservación muestra Fuente: IUCN Red List solo cuando el pipeline encontró datos oficiales."
+            "La app permite elegir entre artifact completo online, artifact ligero online "
+            "y modo offline local. Cada tarjeta puede abrir un mapa Folium con puntos GBIF. "
+            "El estado de conservación muestra Fuente: IUCN Red List solo cuando el pipeline "
+            "encontró datos oficiales."
         )
         render_species_cards(
             result_df,
