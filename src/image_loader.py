@@ -96,7 +96,12 @@ def _clear_image_caches() -> None:
     fetch_wikipedia_summary_image.cache_clear()  # type: ignore[attr-defined]
     search_wikipedia_page_image.cache_clear()  # type: ignore[attr-defined]
     search_wikidata_p18_image.cache_clear()  # type: ignore[attr-defined]
-    search_wikimedia_file.cache_clear()  # type: ignore[attr-defined]
+
+    # search_wikimedia_file is intentionally not cached directly.
+    # This avoids stale Wikimedia results in tests that monkeypatch requests.get.
+    cache_clear = getattr(search_wikimedia_file, "cache_clear", None)
+    if callable(cache_clear):
+        cache_clear()
     fetch_gbif_usage_key.cache_clear()  # type: ignore[attr-defined]
     fetch_gbif_occurrence_images.cache_clear()  # type: ignore[attr-defined]
     fetch_gbif_occurrence_images_by_taxon_key.cache_clear()  # type: ignore[attr-defined]
