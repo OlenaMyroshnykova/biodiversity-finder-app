@@ -143,17 +143,19 @@ def find_species_image_candidates(
 
 
 def build_image_search_names(scientific_name: str, common_names: str = "") -> list[str]:
-    """Build search names from specific to general.
+    """Build image-search names from specific to general.
 
-    Important: use the canonical binomial before the full scientific name with
-    authorship, e.g. ``Gerbillus nanus`` before ``Gerbillus nanus Blanford``.
+    Keep the full scientific name first for backwards compatibility and tests.
+    The remote lookup functions still canonicalize each query internally, so a
+    value such as ``Gerbillus nanus Blanford, 1875`` is safely searched as
+    ``Gerbillus nanus`` when calling Wikipedia/Wikimedia.
     """
     cleaned_name = clean_scientific_name(scientific_name)
     canonical_name = canonicalize_scientific_name(cleaned_name)
     binomial_name = build_binomial_name(canonical_name)
     common_name_values = extract_common_name_values(common_names)
 
-    names = [binomial_name, canonical_name, cleaned_name, *common_name_values[:4]]
+    names = [cleaned_name, canonical_name, binomial_name, *common_name_values[:4]]
     return [name for name in deduplicate_preserving_order(names) if len(name) >= 3]
 
 
@@ -278,7 +280,6 @@ def search_wikidata_p18_image(search_name: str) -> str | None:
     return None
 
 
-@lru_cache(maxsize=4096)
 def search_wikimedia_file(search_name: str) -> str | None:
     """Search Wikimedia Commons files for a representative image."""
     clean_name = canonicalize_scientific_name(search_name)
@@ -334,6 +335,12 @@ def search_wikimedia_file(search_name: str) -> str | None:
         if isinstance(candidate, str) and is_valid_image_url(candidate):
             return candidate
     return None
+
+
+# Keep compatibility with the global cache-clear helper. This function is not
+# cached deliberately: tests monkeypatch ``requests.get`` and should not receive
+# stale URLs from previous calls.
+search_wikimedia_file.cache_clear = lambda: None  # type: ignore[attr-defined]
 
 
 @lru_cache(maxsize=4096)
