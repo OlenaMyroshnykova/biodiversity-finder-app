@@ -1,8 +1,8 @@
 """Contrato de datos entre training y app.
 
 La app no debe adivinar qué columnas existen ni compensar errores del pipeline
-con reglas por especie. Este módulo define las columnas que el artifact debe
-exponer y normaliza valores básicos para que la búsqueda sea estable.
+con reglas por especie. Este módulo define qué columnas son obligatorias para
+buscar y cuáles son solo de presentación.
 """
 from __future__ import annotations
 
@@ -14,17 +14,35 @@ import pandas as pd
 PROJECT_SCOPE_KINGDOMS = {"Animalia", "Plantae"}
 THREATENED_IUCN_CATEGORIES = {"VU", "EN", "CR", "EW", "EX"}
 
-SEARCH_CONTRACT_COLUMNS = [
+# Campos mínimos para que la búsqueda funcione de forma estable.
+# Importante: common_name_es/common_name_en NO son obligatorios. Son columnas
+# bonitas para mostrar nombres por idioma si el pipeline conoce el idioma real
+# desde GBIF/Wikidata, pero el buscador debe funcionar con vernacular_names y
+# search_document aunque esas columnas no existan.
+REQUIRED_SEARCH_CONTRACT_COLUMNS = [
     "scientific_name",
-    "canonical_scientific_name",
     "vernacular_names",
+    "kingdom",
+    "taxon_class",
+    "family",
+    "tags_de_busqueda",
+    "search_document",
+]
+
+# Campos de presentación opcionales. Si faltan, la app los crea vacíos y usa
+# vernacular_names/scientific_name como fallback visual.
+OPTIONAL_DISPLAY_COLUMNS = [
     "common_name_es",
     "common_name_en",
-    "kingdom",
+    "preferred_common_name",
+]
+
+# Campos útiles para búsqueda/ranking si existen, pero no deben bloquear el demo
+# porque algunos artifacts antiguos no los tienen separados.
+OPTIONAL_SEARCH_COLUMNS = [
+    "canonical_scientific_name",
     "phylum",
-    "taxon_class",
     "taxon_order",
-    "family",
     "genus",
     "species",
     "countries",
@@ -33,12 +51,15 @@ SEARCH_CONTRACT_COLUMNS = [
     "color_tag",
     "habitat_tag",
     "size_tag",
-    "tags_de_busqueda",
     "iucn_category",
     "iucn_status_label",
     "conservation_status",
     "conservation_category",
 ]
+
+SEARCH_CONTRACT_COLUMNS = (
+    REQUIRED_SEARCH_CONTRACT_COLUMNS + OPTIONAL_DISPLAY_COLUMNS + OPTIONAL_SEARCH_COLUMNS
+)
 
 ARTIFACT_COLUMNS = SEARCH_CONTRACT_COLUMNS + [
     "observations",
@@ -48,7 +69,6 @@ ARTIFACT_COLUMNS = SEARCH_CONTRACT_COLUMNS + [
     "avg_longitude",
     "most_common_basis",
     "most_common_season",
-    "search_document",
     "image_url",
     "thumbnail_url",
     "media_url",
@@ -72,6 +92,18 @@ class ArtifactValidationResult:
     missing_columns: list[str]
 
 
+@dataclass(frozen=True)
+class ArtifactContractDiagnostics:
+    """Diagnóstico técnico sin alarmar por columnas opcionales."""
+
+    missing_required_columns: list[str]
+    missing_optional_display_columns: list[str]
+
+    @property
+    def is_valid(self) -> bool:
+        return not self.missing_required_columns
+
+
 def normalize_text(value: object) -> str:
     """Normaliza texto para búsqueda ES/EN sin depender de mayúsculas o acentos."""
     text = str(value or "").lower().strip()
@@ -81,9 +113,26 @@ def normalize_text(value: object) -> str:
 
 
 def validate_artifact_contract(df: pd.DataFrame) -> ArtifactValidationResult:
-    """Comprueba que el parquet tenga las columnas mínimas del contrato."""
-    missing = [column for column in SEARCH_CONTRACT_COLUMNS if column not in df.columns]
+    """Comprueba solo las columnas mínimas para que la búsqueda funcione.
+
+    Las columnas ``common_name_es`` y ``common_name_en`` son opcionales porque el
+    idioma solo debe separarse cuando la fuente trae un language code fiable.
+    Si faltan, ``normalize_artifact_dataframe`` las crea vacías.
+    """
+    missing = [column for column in REQUIRED_SEARCH_CONTRACT_COLUMNS if column not in df.columns]
     return ArtifactValidationResult(is_valid=not missing, missing_columns=missing)
+
+
+def get_artifact_contract_diagnostics(df: pd.DataFrame) -> ArtifactContractDiagnostics:
+    """Devuelve diagnóstico completo para un expander técnico, no para warning."""
+    return ArtifactContractDiagnostics(
+        missing_required_columns=[
+            column for column in REQUIRED_SEARCH_CONTRACT_COLUMNS if column not in df.columns
+        ],
+        missing_optional_display_columns=[
+            column for column in OPTIONAL_DISPLAY_COLUMNS if column not in df.columns
+        ],
+    )
 
 
 def normalize_artifact_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -127,11 +176,9 @@ VIBE_TAG_COLUMNS = {"tags_de_busqueda", "color_tag", "habitat_tag", "size_tag"}
 def build_runtime_search_document(df: pd.DataFrame) -> pd.Series:
     """Build the free-text search document from names, taxonomy and profile text.
 
-    Important architecture rule: ``tags_de_busqueda`` and the structured vibe
-    columns are intentionally excluded from the TF-IDF text document. They are
-    used by the natural-language-to-filter layer as structured signals, not as
-    generic text. This avoids false matches such as every brown/savanna/large
-    species being boosted in text search.
+    ``tags_de_busqueda`` and the structured vibe columns are intentionally
+    excluded from the TF-IDF text document. They are used by the
+    natural-language-to-filter layer as structured signals, not as generic text.
 
     The function keeps the original casing from the artifact. The search engine
     normalizes text only at scoring time, so tests/debug output can still show
