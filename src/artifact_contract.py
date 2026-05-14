@@ -121,10 +121,41 @@ def normalize_artifact_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+VIBE_TAG_COLUMNS = {"tags_de_busqueda", "color_tag", "habitat_tag", "size_tag"}
+
+
 def build_runtime_search_document(df: pd.DataFrame) -> pd.Series:
-    """Crea un documento de búsqueda homogéneo desde el contrato del artifact."""
+    """Build the free-text search document from names, taxonomy and profile text.
+
+    Important architecture rule: ``tags_de_busqueda`` and the structured vibe
+    columns are intentionally excluded from the TF-IDF text document. They are
+    used by the natural-language-to-filter layer as structured signals, not as
+    generic text. This avoids false matches such as every brown/savanna/large
+    species being boosted in text search.
+
+    The function keeps the original casing from the artifact. The search engine
+    normalizes text only at scoring time, so tests/debug output can still show
+    names like "Leopardo" or "Phoenicopterus roseus" exactly as they came from
+    the data pipeline.
+    """
     document = pd.Series([""] * len(df), index=df.index, dtype=str)
-    for column in SEARCH_CONTRACT_COLUMNS + ["search_document"]:
+
+    runtime_columns = [
+        column
+        for column in SEARCH_CONTRACT_COLUMNS + ["search_document"]
+        if column not in VIBE_TAG_COLUMNS
+    ]
+
+    for column in runtime_columns:
         if column in df.columns:
-            document = document + " " + df[column].fillna("").astype(str)
-    return document.apply(normalize_text)
+            values = (
+                df[column]
+                .fillna("")
+                .astype(str)
+                .str.replace("|", " ", regex=False)
+                .str.replace(";", " ", regex=False)
+                .str.replace(",", " ", regex=False)
+            )
+            document = document + " " + values
+
+    return document.str.replace(r"\s+", " ", regex=True).str.strip()
