@@ -5,3 +5,10 @@ __pycache__/
 .pytest_cache/
 .streamlit/secrets.toml
 .env
+
+# Local offline artifacts downloaded from Hugging Face for demo/offline mode.
+# They are generated/cache files and must not be committed to the app repository.
+data/offline/*.parquet
+data/offline/*.json
+!data/offline/README_OFFLINE.md
+!data/offline/.gitkeep
